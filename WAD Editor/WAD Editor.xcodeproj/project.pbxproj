@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4CA05F572D7A46DF007A4729 /* Cashmere in Frameworks */ = {isa = PBXBuildFile; productRef = 4CA05F562D7A46DF007A4729 /* Cashmere */; };
 		4CCBE7152D74B34E007347CB /* WADKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCBE7142D74B34E007347CB /* WADKit */; };
 		4CCBE7172D74B351007347CB /* Lemur in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCBE7162D74B351007347CB /* Lemur */; };
 /* End PBXBuildFile section */
@@ -30,6 +31,7 @@
 			files = (
 				4CCBE7172D74B351007347CB /* Lemur in Frameworks */,
 				4CCBE7152D74B34E007347CB /* WADKit in Frameworks */,
+				4CA05F572D7A46DF007A4729 /* Cashmere in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -39,6 +41,7 @@
 		4CB093F12D74AC3C00CEC841 = {
 			isa = PBXGroup;
 			children = (
+				4CCA99832D75D74900EDB8C6 /* Linked */,
 				4CB093FC2D74AC3C00CEC841 /* WAD Editor */,
 				4CCBE7132D74B34E007347CB /* Frameworks */,
 				4CB093FB2D74AC3C00CEC841 /* Products */,
@@ -51,6 +54,13 @@
 				4CB093FA2D74AC3C00CEC841 /* WAD Editor.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		4CCA99832D75D74900EDB8C6 /* Linked */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Linked;
 			sourceTree = "<group>";
 		};
 		4CCBE7132D74B34E007347CB /* Frameworks */ = {
@@ -82,6 +92,7 @@
 			packageProductDependencies = (
 				4CCBE7142D74B34E007347CB /* WADKit */,
 				4CCBE7162D74B351007347CB /* Lemur */,
+				4CA05F562D7A46DF007A4729 /* Cashmere */,
 			);
 			productName = "WAD Editor";
 			productReference = 4CB093FA2D74AC3C00CEC841 /* WAD Editor.app */;
@@ -360,6 +371,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		4CA05F562D7A46DF007A4729 /* Cashmere */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Cashmere;
+		};
 		4CCBE7142D74B34E007347CB /* WADKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = WADKit;

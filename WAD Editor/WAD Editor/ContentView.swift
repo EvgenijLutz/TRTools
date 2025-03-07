@@ -10,6 +10,7 @@ import WADKit
 import Lemur
 import Observation
 import Combine
+import Cashmere
 
 
 enum MeshType {
@@ -83,10 +84,32 @@ class NavigatorItemProvider {
         reload()
     }
     
+    
+    func loadWAD(at url: URL) {
+        editor.clear()
+        reload()
+        
+        Task {
+            let timeTaken = await ContinuousClock().measure {
+                await editor.loadData(at: url)
+            }
+            print("Import time taken: \(timeTaken)")
+            
+            reload()
+        }
+    }
+    
+    
     func reload() {
+        guard let wad = editor.wad else {
+            navigatorList = []
+            provider.delegate?.navigatorItemSetItems(navigatorList)
+            return
+        }
+        
         navigatorList = [
             .init(name: "Texture pages", value: .section, items:
-                    editor.wad?.texturePages.enumerated().map({ index, page in
+                    wad.texturePages.enumerated().map({ index, page in
                         return NavigatorItem(name: "Page #\(index)", value: .texturePage(page))
                     })
                  ),
@@ -103,7 +126,7 @@ class NavigatorItemProvider {
                     return NavigatorItem(name: "Mesh\(badge) #\(index)", value: .mesh(index, type: type))
                 }),
             
-                .init(name: "Models", value: .section, items: editor.wad?.models/*.prefix(30)*/.enumerated().map({ (modelIndex, model) in
+                .init(name: "Models", value: .section, items: wad.models/*.prefix(30)*/.enumerated().map({ (modelIndex, model) in
                     let name = String(describing: model.identifier)
                     return NavigatorItem(name: name, value: .model(modelIndex), items: [
                         .init(name: "Skeleton", value: .section),
@@ -113,7 +136,7 @@ class NavigatorItemProvider {
                     ])
                 })),
             
-                .init(name: "Statics", value: .section, items: editor.wad?.staticObjects.map({ staticObject in
+                .init(name: "Statics", value: .section, items: wad.staticObjects.map({ staticObject in
                     let name = String(describing: staticObject.identifier)
                     return NavigatorItem(name: name, value: .staticObject(staticObject))
                 }))
@@ -183,11 +206,42 @@ class NavigatorItemProvider {
 }
 
 
+struct TransferItem: Transferable, Equatable, Sendable {
+    
+    public var url: URL
+    
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .item) { item in
+            let name = item.file.lastPathComponent
+            let tmpUrl = FileManager.default.temporaryDirectory.appending(component: name)
+            if FileManager.default.fileExists(atPath: tmpUrl.path()) {
+                try FileManager.default.removeItem(at: tmpUrl)
+            }
+            
+            try FileManager.default.copyItem(at: item.file, to: tmpUrl)
+            
+            return .init(url: tmpUrl)
+        }
+//        FileRepresentation(contentType: .item) { item in
+//            SentTransferredFile(item.url)
+//        } importing: { received in
+//            @Dependency(\.fileClient) var fileClient
+//            let temporaryFolder = fileClient.temporaryReplacementDirectory(received.file)
+//            let temporaryURL = temporaryFolder.appendingPathComponent(received.file.lastPathComponent)
+//            let url = try fileClient.copyItemToUniqueURL(at: received.file, to: temporaryURL)
+//            return Self(url)
+//        }
+    }
+}
+
+
 struct ContentView: View {
     @State var viewModel = ViewModel()
     
     @State var meshesExpanded: Bool = true
     @State var path = NavigationPath()
+    
+    @State var timelineVisible: Bool = false
     
     
     var body: some View {
@@ -252,8 +306,106 @@ struct ContentView: View {
         } detail: {
 #if true
             //NavigationStack {
+            
+            VStack(spacing: 0) {
                 SwiftUIGraphicsView(canvas: viewModel.editor.canvas, delegate: viewModel.editor, inputManager: viewModel.editor.inputManager)
-                    .ignoresSafeArea(edges: [.leading, .trailing, .bottom])
+                
+                VStack(spacing: 0) {
+#if os(macOS)
+                    let separator = Color(.separatorColor)
+#else
+                    let separator = Color(.separator)
+#endif
+                    separator
+                        .frame(height: 1)
+                        .frame(maxWidth: .infinity)
+                    
+                    HStack {
+                        Spacer()
+                        
+                        Button {
+                            withAnimation {
+                                timelineVisible.toggle()
+                            }
+                        } label: {
+                            Image(systemName: "slider.horizontal.below.rectangle")
+                                .padding(8)
+                        }
+                        .buttonStyle(.borderless)
+                        
+                    }
+                    
+                    separator
+                        .frame(height: 1)
+                        .frame(maxWidth: .infinity)
+                }
+                .background {
+#if os(macOS)
+                    Color(.controlBackgroundColor)
+#else
+                    Color(.secondarySystemBackground)
+                        .ignoresSafeArea()
+#endif
+                }
+                
+                
+                if timelineVisible {
+                    TimelineEditor()
+                        .ignoresSafeArea()
+                        .transition(.move(edge: .bottom))
+                }
+            }
+                    //.ignoresSafeArea(edges: [.leading, .trailing, .bottom])
+#if false
+                    .dropDestination(for: URL.self) { items, location in
+                        guard let url = items.first else {
+                            print("No url specified")
+                            return false
+                        }
+                        
+                        guard url.pathExtension.lowercased() == "wad" else {
+                            print("Unsupported path extension: \(url.pathExtension)")
+                            return false
+                        }
+                        
+                        print("drop \(items) in \(location)")
+                        Task {
+                            viewModel.loadWAD(at: url)
+                        }
+                        
+                        return true
+                    } isTargeted: { inside in
+                        //
+                    }
+#else
+                    .dropDestination(for: TransferItem.self) { items, location in
+                        guard let url = items.first else {
+                            print("No url specified")
+                            return false
+                        }
+                        
+                        guard url.url.pathExtension.lowercased() == "wad" else {
+                            print("Unsupported path extension: \(url.url.pathExtension)")
+                            return false
+                        }
+                        
+                        //guard let pathUrl = URL(string: url.url.path()) else {
+                        //    print("Could not create path url: \(url.url.path())")
+                        //    return false
+                        //}
+                        
+                        print("read \(url.url.path())")
+                        print("drop \(items) in \(location)")
+                        Task {
+                            viewModel.loadWAD(at: url.url)
+                        }
+                        
+                        return true
+                    } isTargeted: { inside in
+                        //
+                    }
+#endif
+
             //}
             //.navigationTitle("Perview")
 #else
@@ -290,7 +442,7 @@ struct ContentView: View {
             let timeTaken = await ContinuousClock().measure {
                 await viewModel.loadTestData()
             }
-            print("Time taken: \(timeTaken)")
+            print("Import time taken: \(timeTaken)")
         }
     }
 }

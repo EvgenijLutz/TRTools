@@ -11,6 +11,9 @@
       location = "container:../Lemur">
    </FileRef>
    <FileRef
+      location = "container:../Cashmere">
+   </FileRef>
+   <FileRef
       location = "group:WAD Editor/WAD Editor.xcodeproj">
    </FileRef>
 </Workspace>

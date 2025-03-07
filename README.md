@@ -20,4 +20,9 @@ Lemur
 git clone https://github.com/EvgenijLutz/Lemur.git
 ```
 
+Cashmere
+```
+git clone https://github.com/EvgenijLutz/Cashmere.git
+```
+
 And you're good to go!

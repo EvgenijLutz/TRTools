@@ -10,6 +10,7 @@ import Metal
 import WADKit
 import Lemur
 import simd
+import QuartzCore
 
 
 struct GPUMesh {
@@ -35,12 +36,9 @@ class Editor {
     let canvas = Lemur.Canvas()
     
     
-    private var _currentWAD: WAD? = nil
-    var wad: WAD? {
-        get { _currentWAD }
-    }
+    private(set) var wad: WAD? = nil
     
-    
+    private(set) var texturePages: [MTLTexture] = []
     private(set) var meshConnections: [GPUMesh] = []
     
     var currentMeshIndex: Int? = nil {
@@ -67,158 +65,59 @@ class Editor {
     init() {
     }
     
+    func clear() {
+        reset()
+        wad = nil
+        texturePages = []
+        meshConnections = []
+    }
     
     func loadTestData() async {
-        //try? await Task.sleep(nanoseconds: 2_000_000_000)
-        
         guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
         //guard let url = Bundle.main.url(forResource: "1-Home", withExtension: "wad") else {
         //guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
             return
         }
         
+        await loadData(at: url)
+    }
+    
+    func loadData(at url: URL) async {
+        //try? await Task.sleep(nanoseconds: 2_000_000_000)
+        
+        clear()
+        
         guard let renderEngine else {
             return
         }
         
-        let device = renderEngine.device
-        
         do {
+            let now = CACurrentMediaTime()
             let wad = try await WAD.fromFileURL(url: url)
-            
+            let elapsed = CACurrentMediaTime() - now
+            print("Load WAD time taken: \(elapsed) seconds")
             print(wad)
-            await Task.yield()
             
             // Prepare textures
             let convertData = await wad.generateCombinedTexturePages(pagesPerRow: 8)
             var textures: [MTLTexture] = []
-            for textureData in convertData.textures {
-                let descriptor = MTLTextureDescriptor()
-                descriptor.pixelFormat = .bgra8Unorm
-                descriptor.width = convertData.textureWidth
-                descriptor.height = convertData.textureWidth
-                descriptor.storageMode = .shared
-                descriptor.usage = .shaderRead
-            
-                guard let texture = device.makeTexture(descriptor: descriptor) else {
-                    print("Could not create a texture")
-                    return
-                }
-            
-                textureData.contents.withUnsafeBytes { pointer in
-                    guard let baseAddress = pointer.baseAddress else {
-                        return
-                    }
-                    texture.replace(region: MTLRegionMake2D(0, 0, convertData.textureWidth, convertData.textureWidth),
-                                    mipmapLevel: 0,
-                                    withBytes: baseAddress,
-                                    bytesPerRow: convertData.textureWidth * 4)
-                }
-            
+            for holder in convertData.textures {
+                let texture = try await renderEngine.createTexture(from: .init(holder.contents), width: convertData.width, height: convertData.width)
                 textures.append(texture)
-            
-                await Task.yield()
             }
             
-            //let textures: [MTLTexture] = try convertData.textures.map { textureData in
-            //    let descriptor = MTLTextureDescriptor()
-            //    descriptor.pixelFormat = .bgra8Unorm
-            //    descriptor.width = convertData.textureWidth
-            //    descriptor.height = convertData.textureWidth
-            //    descriptor.storageMode = .shared
-            //    descriptor.usage = .shaderRead
-            //
-            //    guard let texture = device.makeTexture(descriptor: descriptor) else {
-            //        print("Could not create a texture")
-            //        throw WADError.other("Could not create a texture")
-            //    }
-            //
-            //    textureData.contents.withUnsafeBytes { pointer in
-            //        guard let baseAddress = pointer.baseAddress else {
-            //            return
-            //        }
-            //        texture.replace(region: MTLRegionMake2D(0, 0, convertData.textureWidth, convertData.textureWidth),
-            //                        mipmapLevel: 0,
-            //                        withBytes: baseAddress,
-            //                        bytesPerRow: convertData.textureWidth * 4)
-            //    }
-            //
-            //    return texture
-            //}
+            
+            // Texture pages
+//            var pages: [MTLTexture] = []
+//            for page in wad.texturePages {
+//                let bgraTexture = await page.generateBGRA8Texture()
+//                let texture = try await renderEngine.createTexture(from: bgraTexture, width: WKTexturePage.width, height: WKTexturePage.height)
+//                pages.append(texture)
+//            }
+//            texturePages = pages
+            
             
             // Prepare meshes
-            //var meshConnections: [GPUMesh] = []
-            //for wadMesh in wad.meshes {
-            //    var connection = GPUMesh()
-            //
-            //    let meshes = try wadMesh.generateVertexBuffers(in: wad, withRemappedTexturePages: convertData.remapInfo)
-            //    for mesh in meshes {
-            //        guard let buffer = device.makeBuffer(length: mesh.data.count, options: .storageModeShared) else {
-            //            continue
-            //        }
-            //
-            //        mesh.data.withUnsafeBytes { pointer in
-            //            guard let baseAddress = pointer.baseAddress else {
-            //                return
-            //            }
-            //            buffer.contents().copyMemory(from: baseAddress, byteCount: mesh.data.count)
-            //        }
-            //
-            //        switch mesh.lightingType {
-            //
-            //        case .normals:
-            //            connection.meshes.append(.init(vertexBuffer: buffer, numVertices: mesh.numVertices, texture: textures[mesh.textureIndex]))
-            //
-            //        case .shades:
-            //            connection.shadedMeshes.append(.init(vertexBuffer: buffer, numVertices: mesh.numVertices, texture: textures[mesh.textureIndex]))
-            //        }
-            //    }
-            //
-            //    meshConnections.append(connection)
-            //}
-            
-            //let meshConnections: [GPUMesh] = try wad.meshes.map { wadMesh in
-            //    var connection = GPUMesh()
-            //
-            //    let meshes = try wadMesh.generateVertexBuffers(in: wad, withRemappedTexturePages: convertData.remapInfo)
-            //    for mesh in meshes {
-            //        guard let buffer = device.makeBuffer(length: mesh.data.count, options: .storageModeShared) else {
-            //            continue
-            //        }
-            //
-            //        mesh.data.withUnsafeBytes { pointer in
-            //            guard let baseAddress = pointer.baseAddress else {
-            //                return
-            //            }
-            //            buffer.contents().copyMemory(from: baseAddress, byteCount: mesh.data.count)
-            //        }
-            //
-            //        switch mesh.lightingType {
-            //
-            //        case .normals:
-            //            connection.meshes.append(.init(vertexBuffer: buffer, numVertices: mesh.numVertices, texture: textures[mesh.textureIndex]))
-            //
-            //        case .shades:
-            //            connection.shadedMeshes.append(.init(vertexBuffer: buffer, numVertices: mesh.numVertices, texture: textures[mesh.textureIndex]))
-            //        }
-            //    }
-            //
-            //    return connection
-            //}
-            
-            struct JointPath {
-                let path: [Int]
-                
-                static func == (lhs: JointPath, rhs: JointPath) -> Bool {
-                    true
-                }
-            }
-            
-            struct VertexInfo {
-                let mesh: Int
-                let jointPath0: [Int]
-                let jointPath1: [Int]
-            }
             
             func getMeshIndices(for joint: WKJoint?, skipRoot: Bool = false) -> [Int] {
                 let index: [Int] = if let mesh = joint?.mesh { [mesh] } else { [] }
@@ -292,7 +191,7 @@ class Editor {
             }
             
             
-            var meshConnections: [GPUMesh] = []
+            var gpuMeshes: [GPUMesh] = []
             for (meshIndex, wadMesh) in wad.meshes.enumerated() {
                 var connection = GPUMesh()
                 
@@ -300,34 +199,26 @@ class Editor {
                 
                 let vertexBuffers = try await wadMesh.generateVertexBuffers(in: wad, jointInfo: jointInfo, withRemappedTexturePages: convertData.remapInfo)
                 for vertexBuffer in vertexBuffers {
-                    guard let buffer = device.makeBuffer(length: vertexBuffer.data.count, options: .storageModeShared) else {
-                        continue
-                    }
-                    
-                    vertexBuffer.data.withUnsafeBytes { pointer in
-                        guard let baseAddress = pointer.baseAddress else {
-                            return
-                        }
-                        buffer.contents().copyMemory(from: baseAddress, byteCount: vertexBuffer.data.count)
-                    }
+                    let buffer = try await renderEngine.createBuffer(from: vertexBuffer.data)
+                    let mesh = LMMesh(vertexBuffer: buffer, numVertices: vertexBuffer.numVertices, texture: textures[vertexBuffer.textureIndex])
                     
                     switch vertexBuffer.lightingType {
                     case .normals:
-                        connection.meshes.append(.init(vertexBuffer: buffer, numVertices: vertexBuffer.numVertices, texture: textures[vertexBuffer.textureIndex]))
+                        connection.meshes.append(mesh)
                         
                     case .shades:
-                        connection.shadedMeshes.append(.init(vertexBuffer: buffer, numVertices: vertexBuffer.numVertices, texture: textures[vertexBuffer.textureIndex]))
+                        connection.shadedMeshes.append(mesh)
                         
                     case .normalsWithWeights:
-                        connection.weightedMeshes.append(.init(vertexBuffer: buffer, numVertices: vertexBuffer.numVertices, texture: textures[vertexBuffer.textureIndex]))
+                        connection.weightedMeshes.append(mesh)
                     }
                 }
                 
-                meshConnections.append(connection)
+                gpuMeshes.append(connection)
             }
             
-            _currentWAD = wad
-            self.meshConnections = meshConnections
+            self.wad = wad
+            meshConnections = gpuMeshes
             currentMeshIndex = 0
             updateCurrentMesh()
         }
@@ -641,6 +532,7 @@ extension Editor {
         canvas.opaqueMeshes = []
         canvas.shadedMeshes = []
         canvas.weightedMeshes = []
+        currentMeshIndex = nil
         currentAnimatinIndex = -1
         currentAnimation = nil
         jointInstance = nil
