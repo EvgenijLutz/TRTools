@@ -11,6 +11,7 @@ import WADKit
 import Lemur
 import simd
 import QuartzCore
+import Cashmere
 
 
 struct GPUMesh {
@@ -34,6 +35,7 @@ struct JointInstance {
 class Editor {
     let inputManager = InputManager()
     let canvas = Lemur.Canvas()
+    var timelineModel: TimelineEditorModel?
     
     
     private(set) var wad: WAD? = nil
@@ -43,7 +45,7 @@ class Editor {
     
     var currentMeshIndex: Int? = nil {
         didSet {
-            updateCurrentMesh()
+            //
         }
     }
     
@@ -63,7 +65,22 @@ class Editor {
     
     
     init() {
+#if false
+        Task {
+            do {
+                if let url = Bundle.main.url(forResource: "medieval_knight", withExtension: "gltf") {
+                //if let url = Bundle.main.url(forResource: "gltf_test", withExtension: "gltf") {
+                    let gltf = try await GLTF.from(url)
+                    print(gltf.asset)
+                }
+            }
+            catch {
+                print(error)
+            }
+        }
+#endif
     }
+    
     
     func clear() {
         reset()
@@ -72,15 +89,36 @@ class Editor {
         meshConnections = []
     }
     
+    
+    private func reset() {
+        canvas.opaqueMeshes = []
+        canvas.shadedMeshes = []
+        canvas.weightedMeshes = []
+        currentMeshIndex = nil
+        currentAnimatinIndex = -1
+        currentAnimation = nil
+        jointInstance = nil
+        skinJointInstance = nil
+        timelineModel?.clear()
+    }
+    
+    
+    func connectTimeline(model: TimelineEditorModel) {
+        timelineModel = model
+        timelineModel?.clear()
+    }
+    
+    
     func loadTestData() async {
-        guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
+        //guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
         //guard let url = Bundle.main.url(forResource: "1-Home", withExtension: "wad") else {
-        //guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
+        guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
             return
         }
         
         await loadData(at: url)
     }
+    
     
     func loadData(at url: URL) async {
         //try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -199,7 +237,7 @@ class Editor {
                 
                 let vertexBuffers = try await wadMesh.generateVertexBuffers(in: wad, jointInfo: jointInfo, withRemappedTexturePages: convertData.remapInfo)
                 for vertexBuffer in vertexBuffers {
-                    let buffer = try await renderEngine.createBuffer(from: vertexBuffer.data)
+                    let buffer = try await renderEngine.createBuffer(from: vertexBuffer.vertexBuffer)
                     let mesh = LMMesh(vertexBuffer: buffer, numVertices: vertexBuffer.numVertices, texture: textures[vertexBuffer.textureIndex])
                     
                     switch vertexBuffer.lightingType {
@@ -219,32 +257,21 @@ class Editor {
             
             self.wad = wad
             meshConnections = gpuMeshes
-            currentMeshIndex = 0
-            updateCurrentMesh()
+            
+            // Select lara
+            if let modelIndex = wad.models.firstIndex(where: { $0.identifier == .LARA }) {
+                let model = wad.models[modelIndex]
+                showModel(modelIndex: modelIndex, animationIndex: model.animations.isEmpty ? nil : 0)
+            }
+            
+            
+            let glb = try await wad.exportGLTFAnimation(0, of: 0)
+            let path = FileManager.default.temporaryDirectory.appending(component: "test.glb")
+            try glb.write(to: path)
         }
         catch {
             print(error)
         }
-    }
-    
-    
-    // TODO: Get rid of it?
-    private func updateCurrentMesh() {
-//        canvas.opaqueMeshes = []
-//        
-//        guard let currentMeshIndex else {
-//            return
-//        }
-//        
-//        guard _meshConnections.count > currentMeshIndex else {
-//            return
-//        }
-//        
-//        guard let mesh = _meshConnections[currentMeshIndex].meshes.first else {
-//            return
-//        }
-//        
-//        canvas.opaqueMeshes = [mesh]
     }
     
     
@@ -263,8 +290,6 @@ class Editor {
         }
         
         currentMeshIndex = currentIndex
-        
-        updateCurrentMesh()
     }
     
 }
@@ -443,8 +468,119 @@ extension Editor: GraphicsViewDelegate {
 
 
 extension Editor {
+    private func editAnimations(for model: WKModel) {
+        timelineModel?.clear()
+        
+        guard currentAnimatinIndex >= 0 else {
+            return
+        }
+        
+        guard let rootJoint = model.rootJoint else {
+            return
+        }
+        
+        let animation = model.animations[currentAnimatinIndex]
+        
+        
+        var index = 0
+        func spawnChildren(for parent: WKJoint, in collection: TMCollection) {
+            let rotation = collection.createGroup("Rotation")
+            
+            func convert(_ points: [Float]) -> [Float] {
+                func correct(_ value: Float) -> Float {
+                    let v = value * 2
+                    if v <= 1 {
+                        return v
+                    }
+                    
+                    return -(1 - (v - 1))
+                }
+                let points = points.map { correct($0) }
+                
+                func shortestDistance(from: Float, to: Float) -> Float {
+                    // TODO: Correct negative offsets
+//                    if sign(from) != sign(to) {
+//                        if from < 0 {
+//
+//                        }
+//                    }
+//                    
+//                    if abs(to - from) < 1 {
+//                        return to - from
+//                    }
+//                    
+//                    return -to + from
+                    
+                    return [
+                        to - from,
+                        to + 2 - from,
+                        -(from + 2 - to)
+                    ].min(by: { abs($0) < abs($1) }) ?? 0
+                }
+                
+                var previousValue: Float = points.first ?? 0
+                var previousDistance: Float = shortestDistance(from: 0, to: previousValue)
+                var modifiedPoints: [Float] = [previousDistance]
+                for value in points.dropFirst() {
+                    let distance = shortestDistance(from: previousValue, to: value)
+                    modifiedPoints.append(previousDistance + distance)
+                    previousValue = value
+                    previousDistance = distance
+                }
+                
+#if false
+                return modifiedPoints
+#else
+                // We need more drama
+                let minValue = abs(modifiedPoints.min() ?? 0)
+                let maxValue = abs(modifiedPoints.max() ?? 0)
+                
+                let range = max(minValue, maxValue)
+                if range < 0.00001 {
+                    return modifiedPoints
+                }
+                let multiplier = 0.9 / range
+                
+                return modifiedPoints.map {
+                    $0 * multiplier
+                }
+#endif
+            }
+            
+            let xPoints = convert(animation.keyframes.map({ $0.rotations[index].x }))
+            let yPoints = convert(animation.keyframes.map({ $0.rotations[index].y }))
+            let zPoints = convert(animation.keyframes.map({ $0.rotations[index].z }))
+            
+            _ = rotation.createAxis("x", records: xPoints.enumerated().map({ .init(x: Float($0), y: $1)}))
+            _ = rotation.createAxis("y", records: yPoints.enumerated().map({ .init(x: Float($0), y: $1)}))
+            _ = rotation.createAxis("z", records: zPoints.enumerated().map({ .init(x: Float($0), y: $1)}))
+            
+            
+            //_ = rotation.createAxis("x", records: animation.keyframes.enumerated().map({ .init(x: Float($0), y: $1.rotations[index].x)}))
+            //_ = rotation.createAxis("y", records: animation.keyframes.enumerated().map({ .init(x: Float($0), y: $1.rotations[index].y)}))
+            //_ = rotation.createAxis("z", records: animation.keyframes.enumerated().map({ .init(x: Float($0), y: $1.rotations[index].z)}))
+            
+            index += 1
+            
+            for child in parent.joints {
+                let currentOwner = collection.createCollection("some")
+                spawnChildren(for: child, in: currentOwner)
+            }
+        }
+        
+        if let root = timelineModel?.createCollection("Root") {
+            spawnChildren(for: rootJoint, in: root)
+            root.resetControlPoints()
+            root.updateLayout()
+            //_ = timelineModel.updateLayout(animated: false)
+        }
+    }
+}
+
+
+extension Editor {
     private func findModel(_ modelIdentifier: TR4ObjectType) -> WKModel? {
-        wad?.models.first { $0.identifier == modelIdentifier }
+        wad?.findModel(modelIdentifier)
     }
     
     func findMeshInfo(_ meshIndex: Int) -> (opaque: [LMMesh], shaded: [LMMesh], weighted: [LMMesh]) {
@@ -525,18 +661,6 @@ extension Editor {
         else {
             jointInstance = addMesh(rootJoint, origin: .init())
         }
-    }
-    
-    
-    private func reset() {
-        canvas.opaqueMeshes = []
-        canvas.shadedMeshes = []
-        canvas.weightedMeshes = []
-        currentMeshIndex = nil
-        currentAnimatinIndex = -1
-        currentAnimation = nil
-        jointInstance = nil
-        skinJointInstance = nil
     }
     
     
@@ -638,6 +762,8 @@ extension Editor {
             
             animationStartTime = -1
             displayAnimationKeyframe(0)
+            
+            editAnimations(for: model)
         }
         else {
             displayDefaultState(jointInstance)

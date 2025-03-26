@@ -235,24 +235,170 @@ struct TransferItem: Transferable, Equatable, Sendable {
 }
 
 
+struct ViewportView: View {
+    @State var viewModel: ViewModel
+    @State var timelineVisible: Bool = true
+    
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            SwiftUIGraphicsView(canvas: viewModel.editor.canvas, delegate: viewModel.editor, inputManager: viewModel.editor.inputManager)
+            
+            /*
+            VStack(spacing: 0) {
+#if os(macOS)
+                let separator = Color(.separatorColor)
+#else
+                let separator = Color(.separator)
+#endif
+                separator
+                    .frame(height: 1)
+                    .frame(maxWidth: .infinity)
+                
+                HStack {
+                    Spacer()
+                    
+                    Button {
+                        withAnimation {
+                            timelineVisible.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "slider.horizontal.below.rectangle")
+                            .padding(8)
+                    }
+                    .buttonStyle(.borderless)
+                    
+                }
+                
+                separator
+                    .frame(height: 1)
+                    .frame(maxWidth: .infinity)
+            }
+            .background {
+#if os(macOS)
+                Color(.controlBackgroundColor)
+#else
+                Color(.secondarySystemBackground)
+                    .ignoresSafeArea()
+#endif
+            }
+            
+            
+            if timelineVisible {
+                TimelineEditor { model in
+                    viewModel.editor.connectTimeline(model: model)
+                }
+                .ignoresSafeArea()
+                .transition(.move(edge: .bottom))
+            }*/
+        }
+        //.ignoresSafeArea(edges: [.leading, .trailing, .bottom])
+#if false
+        .dropDestination(for: URL.self) { items, location in
+            guard let url = items.first else {
+                print("No url specified")
+                return false
+            }
+            
+            guard url.pathExtension.lowercased() == "wad" else {
+                print("Unsupported path extension: \(url.pathExtension)")
+                return false
+            }
+            
+            print("drop \(items) in \(location)")
+            Task {
+                viewModel.loadWAD(at: url)
+            }
+            
+            return true
+        } isTargeted: { inside in
+            //
+        }
+#else
+        .dropDestination(for: TransferItem.self) { items, location in
+            guard let url = items.first else {
+                print("No url specified")
+                return false
+            }
+            
+            guard url.url.pathExtension.lowercased() == "wad" else {
+                print("Unsupported path extension: \(url.url.pathExtension)")
+                return false
+            }
+            
+            //guard let pathUrl = URL(string: url.url.path()) else {
+            //    print("Could not create path url: \(url.url.path())")
+            //    return false
+            //}
+            
+            print("read \(url.url.path())")
+            print("drop \(items) in \(location)")
+            Task {
+                viewModel.loadWAD(at: url.url)
+            }
+            
+            return true
+        } isTargeted: { inside in
+            //
+        }
+#endif
+    }
+}
+
+
 struct ContentView: View {
     @State var viewModel = ViewModel()
     
     @State var meshesExpanded: Bool = true
     @State var path = NavigationPath()
     
-    @State var timelineVisible: Bool = false
+    @State var navValue: Bool = true
     
     
     var body: some View {
         NavigationSplitView {
 #if true
+            //NavigationLink(value: navValue) {
+            //    Text(navValue ?? "none")
+            //}
+            
             NavigatorTestView(dataProvider: viewModel.provider) { item in
-                viewModel.selection = item.id
-                viewModel.updateCurrentSelection()
+                switch item.value {
+                case .section:
+                    break
+                
+                case .texturePage(_):
+                    break
+                    
+                //case .mesh(let mesh, let type):
+                //    break
+                //
+                //case .model(let model):
+                //    break
+                //case .animation(let model, let animation):
+                //    break
+                //
+                //case .staticObject(let staticObject):
+                //    break
+                default:
+                    navValue = true
+                    viewModel.selection = item.id
+                    viewModel.updateCurrentSelection()
+                }
+                //if item.value != .section {
+                //    navValue = true
+                //    viewModel.selection = item.id
+                //    viewModel.updateCurrentSelection()
+                //}
+                //else {
+                //    navValue = false
+                //}
             }
             .ignoresSafeArea()
             .navigationTitle("WAD Editor")
+            .navigationDestination(isPresented: $navValue) {
+                ViewportView(viewModel: viewModel)
+            }
 #elseif true
             // Combinatoric hell
             List(selection: $viewModel.selection) {
@@ -265,176 +411,12 @@ struct ContentView: View {
                 viewModel.updateCurrentSelection()
             }
             .navigationTitle("WAD Editor")
-#else
-            Table(of: ViewModel.MeshItem.self, selection: $viewModel.selection) {
-                TableColumn("Name") { item in
-                    HStack {
-                        Image(systemName: "chevron.forward")
-                            .rotationEffect(.degrees(item.expanded ? 90 : 0))
-                            .opacity(item.items.isEmpty ? 0 : 1)
-                            .onTapGesture {
-                                guard let index = viewModel.meshesList.firstIndex(where: { $0.id == item.id }) else {
-                                    return
-                                }
-                                
-                                withAnimation {
-                                    viewModel.meshesList[index].expanded.toggle()
-                                }
-                            }
-                        
-                        Text(item.name)
-                        //NavigationLink(item.name, value: item.id)
-                    }
-                    .transition(.slide)
-                }
-            } rows: {
-                ForEach(viewModel.meshesList) { item in
-                    TableRow(item)
-                    if item.expanded {
-                        ForEach(item.items) { child in
-                            TableRow(child)
-                        }
-                    }
-                }
-            }
-            .tableColumnHeaders(.hidden)
-            .onChange(of: viewModel.selection) { oldValue, newValue in
-                viewModel.updateCurrentSelection()
-            }
-            .navigationTitle("WAD Editor")
 #endif
         } detail: {
-#if true
-            //NavigationStack {
-            
-            VStack(spacing: 0) {
-                SwiftUIGraphicsView(canvas: viewModel.editor.canvas, delegate: viewModel.editor, inputManager: viewModel.editor.inputManager)
-                
-                VStack(spacing: 0) {
-#if os(macOS)
-                    let separator = Color(.separatorColor)
-#else
-                    let separator = Color(.separator)
-#endif
-                    separator
-                        .frame(height: 1)
-                        .frame(maxWidth: .infinity)
-                    
-                    HStack {
-                        Spacer()
-                        
-                        Button {
-                            withAnimation {
-                                timelineVisible.toggle()
-                            }
-                        } label: {
-                            Image(systemName: "slider.horizontal.below.rectangle")
-                                .padding(8)
-                        }
-                        .buttonStyle(.borderless)
-                        
-                    }
-                    
-                    separator
-                        .frame(height: 1)
-                        .frame(maxWidth: .infinity)
-                }
-                .background {
-#if os(macOS)
-                    Color(.controlBackgroundColor)
-#else
-                    Color(.secondarySystemBackground)
-                        .ignoresSafeArea()
-#endif
-                }
-                
-                
-                if timelineVisible {
-                    TimelineEditor()
-                        .ignoresSafeArea()
-                        .transition(.move(edge: .bottom))
-                }
-            }
-                    //.ignoresSafeArea(edges: [.leading, .trailing, .bottom])
 #if false
-                    .dropDestination(for: URL.self) { items, location in
-                        guard let url = items.first else {
-                            print("No url specified")
-                            return false
-                        }
-                        
-                        guard url.pathExtension.lowercased() == "wad" else {
-                            print("Unsupported path extension: \(url.pathExtension)")
-                            return false
-                        }
-                        
-                        print("drop \(items) in \(location)")
-                        Task {
-                            viewModel.loadWAD(at: url)
-                        }
-                        
-                        return true
-                    } isTargeted: { inside in
-                        //
-                    }
+            ViewportView(viewModel: viewModel)
 #else
-                    .dropDestination(for: TransferItem.self) { items, location in
-                        guard let url = items.first else {
-                            print("No url specified")
-                            return false
-                        }
-                        
-                        guard url.url.pathExtension.lowercased() == "wad" else {
-                            print("Unsupported path extension: \(url.url.pathExtension)")
-                            return false
-                        }
-                        
-                        //guard let pathUrl = URL(string: url.url.path()) else {
-                        //    print("Could not create path url: \(url.url.path())")
-                        //    return false
-                        //}
-                        
-                        print("read \(url.url.path())")
-                        print("drop \(items) in \(location)")
-                        Task {
-                            viewModel.loadWAD(at: url.url)
-                        }
-                        
-                        return true
-                    } isTargeted: { inside in
-                        //
-                    }
-#endif
-
-            //}
-            //.navigationTitle("Perview")
-#else
-            //Color.pink
-            SwiftUIGraphicsView(canvas: viewModel.editor.canvas, delegate: viewModel.editor, inputManager: viewModel.editor.inputManager)
-                .ignoresSafeArea(edges: [.leading, .trailing, .bottom])
-                //.toolbar {
-                //    ToolbarItem(id: "run", placement: .secondaryAction) {
-                //        ControlGroup {
-                //            HStack(spacing: 0) {
-                //
-                //                Button(action: {
-                //                    //
-                //                }, label: {
-                //                    Image(systemName: "play.fill")
-                //                })
-                //
-                //                Button(action: {
-                //                    //
-                //                }, label: {
-                //                    Image(systemName: "gearshape.fill")
-                //                })
-                //            }
-                //        } label: {
-                //            Label("Edits", systemImage: "gearshape")
-                //        }
-                //    }
-                //}
-                //.toolbarRole(.editor)
+            Text("Select an item in the list on the left to see the details")
 #endif
         }
         .navigationSplitViewStyle(.balanced)
