@@ -120,114 +120,163 @@ struct DataWriter {
 
 
 extension WAD {
-    func exportGLTFAnimation(_ animationIndex: Int, of movableIndex: Int) async throws -> Data {
+    func exportGLTFAnimation(_ animationIndex: Int, of modelTyle: TR4ObjectType) async throws -> Data {
+        guard let model = findModel(modelTyle) else {
+            throw WADError.modelNotFound
+        }
+        
+        guard let rootJoint = model.rootJoint else {
+            throw WADError.modelNotFound
+        }
+        
         let convertData = await generateCombinedTexturePages(pagesPerRow: 8)
-        let vertexBuffers = try await meshes[31].generateVertexBuffers(in: self, withRemappedTexturePages: convertData.remapInfo)
         
         var buffers: [GLTFBuffer] = []
         var bufferViews: [GLTFBufferView] = []
         var accessors: [GLTFAccessor] = []
         var meshes: [GLTFMesh] = []
         var nodes: [GLTFNode] = []
+        var skins: [GLTFSkin] = []
         
         
         var binaryData = Data()
         
-        
-        for vertexBuffer in vertexBuffers {
-            var reader = DataReader(vertexBuffer.vertexBuffer)
-            let stride = vertexBuffer.lightingType.stride
+        func serializeMesh(_ meshIndex: Int) async throws -> Int {
+            // Mesh submeshes
+            var primitives: [GLTFMeshPrimitive] = []
             
-            var attributes: [String: Int] = [:]
-            
-            // Vertices
-            do {
-                var writer = DataWriter()
+            let vertexBuffers = try await self.meshes[meshIndex].generateVertexBuffers(in: self, withRemappedTexturePages: convertData.remapInfo)
+            for vertexBuffer in vertexBuffers {
+                var reader = DataReader(vertexBuffer.vertexBuffer)
+                let stride = vertexBuffer.lightingType.stride
                 
-                for i in 0 ..< vertexBuffer.numVertices {
-                    reader.set(i * stride)
-                    let x: Float = try reader.read()
-                    let y: Float = try reader.read()
-                    let z: Float = try reader.read()
+                var attributes: [String: Int] = [:]
+                
+                // Vertices
+                do {
+                    var writer = DataWriter()
                     
-                    writer.write(x)
-                    writer.write(y)
-                    writer.write(z)
+                    var xArray: [Float] = []
+                    var yArray: [Float] = []
+                    var zArray: [Float] = []
+                    
+                    for i in 0 ..< vertexBuffer.numVertices {
+                        reader.set(i * stride)
+                        let x: Float = try reader.read()
+                        let y: Float = try reader.read()
+                        let z: Float = try reader.read()
+                        
+                        writer.write(x)
+                        writer.write(y)
+                        writer.write(z)
+                        
+                        xArray.append(x)
+                        yArray.append(y)
+                        zArray.append(z)
+                    }
+                    
+                    attributes["POSITION"] = accessors.count
+                    
+                    accessors.append(.init(
+                        bufferView: bufferViews.count,
+                        byteOffset: 0,
+                        componentType: .float,
+                        count: vertexBuffer.numVertices /*/ 3*/,
+                        type: .vec3,
+                        max: [xArray.max() ?? 0, yArray.max() ?? 0, zArray.max() ?? 0],
+                        min: [xArray.min() ?? 0, yArray.min() ?? 0, zArray.min() ?? 0]
+                    ))
+                    
+                    bufferViews.append(.init(
+                        buffer: 0,
+                        byteOffset: binaryData.count,
+                        byteLength: writer.data.count,
+                        byteStride: 12,
+                        target: .arrayBuffer
+                    ))
+                    
+                    binaryData.append(writer.data)
                 }
                 
-                attributes["POSITION"] = accessors.count
-                
-                accessors.append(.init(
-                    bufferView: bufferViews.count,
-                    byteOffset: 0,
-                    componentType: .float,
-                    count: vertexBuffer.numVertices /*/ 3*/,
-                    type: .vec3
-                ))
-                
-                bufferViews.append(.init(
-                    buffer: 0,
-                    byteOffset: binaryData.count,
-                    byteLength: writer.data.count,
-                    byteStride: 12
-                ))
-                
-                binaryData.append(writer.data)
-            }
-            
-            // Normals
-            if vertexBuffer.lightingType == .normals || vertexBuffer.lightingType == .normalsWithWeights {
-                var writer = DataWriter()
-                
-                for i in 0 ..< vertexBuffer.numVertices {
-                    reader.set(i * stride + 20)
-                    let x: Float = try reader.read()
-                    let y: Float = try reader.read()
-                    let z: Float = try reader.read()
+                // Normals
+                if vertexBuffer.lightingType == .normals || vertexBuffer.lightingType == .normalsWithWeights {
+                    var writer = DataWriter()
                     
-                    writer.write(x)
-                    writer.write(y)
-                    writer.write(z)
+                    for i in 0 ..< vertexBuffer.numVertices {
+                        reader.set(i * stride + 20)
+                        let x: Float = try reader.read()
+                        let y: Float = try reader.read()
+                        let z: Float = try reader.read()
+                        
+                        writer.write(x)
+                        writer.write(y)
+                        writer.write(z)
+                    }
+                    
+                    attributes["NORMAL"] = accessors.count
+                    
+                    accessors.append(.init(
+                        bufferView: bufferViews.count,
+                        byteOffset: 0,
+                        componentType: .float,
+                        count: vertexBuffer.numVertices /*/ 3*/,
+                        type: .vec3
+                    ))
+                    
+                    bufferViews.append(.init(
+                        buffer: 0,
+                        byteOffset: binaryData.count,
+                        byteLength: writer.data.count,
+                        byteStride: 12,
+                        target: .arrayBuffer
+                    ))
+                    
+                    binaryData.append(writer.data)
                 }
                 
-                attributes["NORMAL"] = accessors.count
-                
-                accessors.append(.init(
-                    bufferView: bufferViews.count,
-                    byteOffset: 0,
-                    componentType: .float,
-                    count: vertexBuffer.numVertices /*/ 3*/,
-                    type: .vec3
+                primitives.append(.init(
+                    attributes: attributes,
+                    material: nil,
+                    mode: .triangles
                 ))
-                
-                bufferViews.append(.init(
-                    buffer: 0,
-                    byteOffset: binaryData.count,
-                    byteLength: writer.data.count,
-                    byteStride: 12
-                ))
-                
-                binaryData.append(writer.data)
             }
             
-            
-            
-            nodes.append(.init(
-                mesh: meshes.count,
-                rotation: [0,0,0,1],
-                scale: [2,2,2],
-                translation: [0,0,0]
-            ))
-            
+            let gltfMeshIndex = meshes.count
             meshes.append(.init(
-                primitives: [
-                    .init(
-                        attributes: attributes,
-                        mode: .triangles
-                    )
-                ]
+                primitives: primitives
             ))
+            
+            return gltfMeshIndex
         }
+        
+        var skeletonJointNodes: [Int] = []
+        func serializeJoint(_ joint: WKJoint) async throws -> Int {
+            var childNodes: [Int] = []
+            
+            for child in joint.joints {
+                let childNode = try await serializeJoint(child)
+                childNodes.append(childNode)
+            }
+            
+            let gltfMeshIndex = try await serializeMesh(joint.mesh)
+            nodes.append(.init(
+                children: childNodes.isEmpty ? nil : childNodes,
+                mesh: gltfMeshIndex,
+                rotation: [0,0,0,1],
+                scale: [1,1,1],
+                translation: [joint.offset.x, -joint.offset.y, -joint.offset.z]
+            ))
+            
+            // Return index of the last generated node
+            let jointNode = nodes.count - 1
+            skeletonJointNodes.append(jointNode)
+            return jointNode
+        }
+        let skeletonRootNode = try await serializeJoint(rootJoint)
+        
+        // Skinning
+        //attributes["JOINTS_0"] = accessors.count
+        //attributes["WEIGHTS_0"] = accessors.count
         
         
         buffers.append(.init(
@@ -235,10 +284,9 @@ extension WAD {
         ))
         
         
-        var skins: [GLTFSkin] = []
         skins.append(.init(
-            skeleton: 0,
-            joints: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+            skeleton: skeletonRootNode,
+            joints: skeletonJointNodes
         ))
         
         
@@ -263,8 +311,11 @@ extension WAD {
         ))
         
         
+        //skins.append(.ini)
+        
+        
         let asset = GLTFAsset(generator: "WAD Editor 1.0.0-alpha1", version: "2.0")
-        let gltf = GLTF(accessors: accessors, asset: asset, buffers: buffers, bufferViews: bufferViews, meshes: meshes, nodes: nodes)
+        let gltf = GLTF(accessors: accessors, animations: nil, asset: asset, buffers: buffers, bufferViews: bufferViews, meshes: meshes, nodes: nodes, skins: skins)
         let library = GLTFLibrary(gltf: gltf, binaryChunks: [binaryData])
         
         return try await library.exportToGLB()

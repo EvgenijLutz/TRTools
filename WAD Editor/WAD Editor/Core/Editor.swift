@@ -110,9 +110,9 @@ class Editor {
     
     
     func loadTestData() async {
-        //guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
+        guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
         //guard let url = Bundle.main.url(forResource: "1-Home", withExtension: "wad") else {
-        guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
+        //guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
             return
         }
         
@@ -258,16 +258,21 @@ class Editor {
             self.wad = wad
             meshConnections = gpuMeshes
             
+#if DEBUG
             // Select lara
             if let modelIndex = wad.models.firstIndex(where: { $0.identifier == .LARA }) {
                 let model = wad.models[modelIndex]
                 showModel(modelIndex: modelIndex, animationIndex: model.animations.isEmpty ? nil : 0)
             }
+#endif
             
-            
-            let glb = try await wad.exportGLTFAnimation(0, of: 0)
+#if DEBUG
+            // Export gltf
+            let glb = try await wad.exportGLTFAnimation(0, of: .MUMMY)
             let path = FileManager.default.temporaryDirectory.appending(component: "test.glb")
             try glb.write(to: path)
+            print("File written at \(path)")
+#endif
         }
         catch {
             print(error)
