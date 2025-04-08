@@ -120,10 +120,22 @@ struct DataWriter {
 
 
 extension WAD {
+    /// Generates a `glb` file contents that conform to [glTF Validator](https://github.khronos.org/glTF-Validator/) rules.
     func exportGLTFAnimation(_ animationIndex: Int, of modelTyle: TR4ObjectType) async throws -> Data {
-        guard let model = findModel(modelTyle) else {
+        guard let animationModel = findModel(modelTyle) else {
             throw WADError.modelNotFound
         }
+        
+        let model: WKModel = try {
+            if modelTyle == .LARA {
+                guard let skinModel = findModel(.LARA_SKIN) else {
+                    throw WADError.modelNotFound
+                }
+                return skinModel
+            }
+            
+            return animationModel
+        }()
         
         guard let rootJoint = model.rootJoint else {
             throw WADError.modelNotFound
@@ -156,6 +168,7 @@ extension WAD {
                 do {
                     var writer = DataWriter()
                     
+                    // Collect vertex info for calculating min and max - for json validation purposes
                     var xArray: [Float] = []
                     var yArray: [Float] = []
                     var zArray: [Float] = []
@@ -249,11 +262,16 @@ extension WAD {
             return gltfMeshIndex
         }
         
+        var nodeRemapInfo: [Int] = []
+        func node(for jointIndex: Int) -> Int {
+            return nodeRemapInfo[jointIndex]
+        }
+        
         var skeletonJointNodes: [Int] = []
         func serializeJoint(_ joint: WKJoint) async throws -> Int {
             var childNodes: [Int] = []
             
-            for child in joint.joints {
+            for child in joint.joints.reversed() {
                 let childNode = try await serializeJoint(child)
                 childNodes.append(childNode)
             }
@@ -270,6 +288,10 @@ extension WAD {
             // Return index of the last generated node
             let jointNode = nodes.count - 1
             skeletonJointNodes.append(jointNode)
+            
+            // Append node remap info
+            nodeRemapInfo.insert(jointNode, at: 0)
+            
             return jointNode
         }
         let skeletonRootNode = try await serializeJoint(rootJoint)
@@ -279,11 +301,6 @@ extension WAD {
         //attributes["WEIGHTS_0"] = accessors.count
         
         
-        buffers.append(.init(
-            byteLength: binaryData.count
-        ))
-        
-        
         skins.append(.init(
             skeleton: skeletonRootNode,
             joints: skeletonJointNodes
@@ -291,31 +308,154 @@ extension WAD {
         
         
         var animations: [GLTFAnimation] = []
-        animations.append(.init(
-            channels: [
-                .init(
-                    sampler: 0,
-                    target: .init(
-                        node: 0,
-                        path: .rotation
+        func exportAnimation(_ animationIndex: Int) {
+            let timeScale = Float(1) / Float(24) * 2
+            var channels: [GLTFChannel] = []
+            var samplers: [GLTFAnimationSampler] = []
+            
+            
+            func makeAccessor(for data: Data, of dataType: GLTFAccessorType, numElements: Int, min: Float? = nil, max: Float? = nil) -> Int {
+                let bufferIndex = bufferViews.count
+                bufferViews.append(
+                    .init(
+                        buffer: 0,
+                        byteOffset: binaryData.count,
+                        byteLength: data.count
                     )
                 )
-            ],
-            samplers: [
-                .init(
-                    input: 0,
-                    interpolation: .linear,
-                    output: 1
+                
+                binaryData.append(data)
+                
+                let accessorIndex = accessors.count
+                let maxRange: [Float]? = {
+                    guard let max else {
+                        return nil
+                    }
+                    return [max]
+                }()
+                let minRange: [Float]? = {
+                    guard let min else {
+                        return nil
+                    }
+                    return [min]
+                }()
+                accessors.append(
+                    .init(
+                        bufferView: bufferIndex,
+                        componentType: .float,
+                        count: numElements,
+                        type: dataType,
+                        max: maxRange,
+                        min: minRange
+                    )
                 )
-            ]
+                
+                return accessorIndex
+            }
+            
+            func makeSampler(time: Data, values: Data, dataType: GLTFAccessorType, count: Int) -> Int {
+                let timeAccessorIndex = makeAccessor(for: time, of: .scalar, numElements: count, min: 0, max: Float(count - 1) * timeScale)
+                let dataAccessorIndex = makeAccessor(for: values, of: dataType, numElements: count)
+                
+                let samplerIndex = samplers.count
+                samplers.append(
+                    .init(
+                        input: timeAccessorIndex,
+                        interpolation: .linear,
+                        output: dataAccessorIndex
+                    )
+                )
+                
+                return samplerIndex
+            }
+            
+            
+            // Translation channel
+            do {
+                
+                do {
+                    var timeWriter = DataWriter()
+                    var dataWriter = DataWriter()
+                    
+                    let animation = animationModel.animations[animationIndex]
+                    let animationTimeScale = Float(animation.frameDuration)
+                    for (index, keyframe) in animation.keyframes.enumerated() {
+                        timeWriter.write(Float(index) * timeScale * animationTimeScale)
+                        
+                        dataWriter.write(keyframe.offset.x)
+                        dataWriter.write(-keyframe.offset.y)
+                        dataWriter.write(-keyframe.offset.z)
+                    }
+                    
+                    
+                    let sampler = makeSampler(time: timeWriter.data, values: dataWriter.data, dataType: .vec3, count: animation.keyframes.count)
+                    channels.append(
+                        .init(
+                            sampler: sampler,
+                            target: .init(
+                                // Root node
+                                node: nodeRemapInfo[0],
+                                path: .translation
+                            )
+                        )
+                    )
+                }
+                
+                func serializeJointAnimation(_ jointIndex: Int) {
+                    var timeWriter = DataWriter()
+                    var dataWriter = DataWriter()
+                    
+                    let animation = animationModel.animations[animationIndex]
+                    let animationTimeScale = Float(animation.frameDuration)
+                    for (index, keyframe) in animation.keyframes.enumerated() {
+                        timeWriter.write(Float(index) * timeScale * animationTimeScale)
+                        
+                        let rotation = keyframe.rotations[jointIndex].simdQuaternion
+                        dataWriter.write(rotation.vector.x)
+                        dataWriter.write(rotation.vector.y)
+                        dataWriter.write(rotation.vector.z)
+                        dataWriter.write(rotation.vector.w)
+                    }
+                    
+                    
+                    let sampler = makeSampler(time: timeWriter.data, values: dataWriter.data, dataType: .vec4, count: animation.keyframes.count)
+                    channels.append(
+                        .init(
+                            sampler: sampler,
+                            target: .init(
+                                // Root node
+                                node: nodeRemapInfo[jointIndex],
+                                path: .rotation
+                            )
+                        )
+                    )
+                }
+                
+                for jointIndex in 0 ..< nodeRemapInfo.count {
+                    serializeJointAnimation(jointIndex)
+                }
+            }
+            
+            
+            animations.append(
+                .init(channels: channels, samplers: samplers)
+            )
+        }
+        //exportAnimation(animationIndex)
+        for index in 0 ..< animationModel.animations.count {
+            exportAnimation(index)
+        }
+        
+        
+        
+        // Write buffers
+        buffers.append(.init(
+            byteLength: binaryData.count
         ))
         
         
-        //skins.append(.ini)
-        
-        
         let asset = GLTFAsset(generator: "WAD Editor 1.0.0-alpha1", version: "2.0")
-        let gltf = GLTF(accessors: accessors, animations: nil, asset: asset, buffers: buffers, bufferViews: bufferViews, meshes: meshes, nodes: nodes, skins: skins)
+        let gltf = GLTF(accessors: accessors, animations: animations, asset: asset, buffers: buffers, bufferViews: bufferViews, meshes: meshes, nodes: nodes, skins: skins)
         let library = GLTFLibrary(gltf: gltf, binaryChunks: [binaryData])
         
         return try await library.exportToGLB()
