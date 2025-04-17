@@ -240,7 +240,7 @@ class Editor {
                     let buffer = try await renderEngine.createBuffer(from: vertexBuffer.vertexBuffer)
                     let mesh = LMMesh(vertexBuffer: buffer, numVertices: vertexBuffer.numVertices, texture: textures[vertexBuffer.textureIndex])
                     
-                    switch vertexBuffer.lightingType {
+                    switch vertexBuffer.layoutType {
                     case .normals:
                         connection.meshes.append(mesh)
                         

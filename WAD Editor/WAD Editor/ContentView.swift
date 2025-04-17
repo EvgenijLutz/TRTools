@@ -235,6 +235,61 @@ struct TransferItem: Transferable, Equatable, Sendable {
 }
 
 
+extension View {
+    func wadDropDestination(_ viewModel: ViewModel) -> some View {
+#if false
+        self.dropDestination(for: URL.self) { items, location in
+            guard let url = items.first else {
+                print("No url specified")
+                return false
+            }
+            
+            guard url.pathExtension.lowercased() == "wad" else {
+                print("Unsupported path extension: \(url.pathExtension)")
+                return false
+            }
+            
+            print("drop \(items) in \(location)")
+            Task {
+                viewModel.loadWAD(at: url)
+            }
+            
+            return true
+        } isTargeted: { inside in
+            //
+        }
+#else
+        self.dropDestination(for: TransferItem.self) { items, location in
+            guard let url = items.first else {
+                print("No url specified")
+                return false
+            }
+            
+            guard url.url.pathExtension.lowercased() == "wad" else {
+                print("Unsupported path extension: \(url.url.pathExtension)")
+                return false
+            }
+            
+            //guard let pathUrl = URL(string: url.url.path()) else {
+            //    print("Could not create path url: \(url.url.path())")
+            //    return false
+            //}
+            
+            print("read \(url.url.path())")
+            print("drop \(items) in \(location)")
+            Task {
+                viewModel.loadWAD(at: url.url)
+            }
+            
+            return true
+        } isTargeted: { inside in
+            //
+        }
+#endif
+    }
+}
+
+
 struct ViewportView: View {
     @State var viewModel: ViewModel
     @State var timelineVisible: Bool = true
@@ -243,6 +298,7 @@ struct ViewportView: View {
     var body: some View {
         VStack(spacing: 0) {
             SwiftUIGraphicsView(canvas: viewModel.editor.canvas, delegate: viewModel.editor, inputManager: viewModel.editor.inputManager)
+                .wadDropDestination(viewModel)
             
             /*
             VStack(spacing: 0) {
@@ -293,55 +349,6 @@ struct ViewportView: View {
             }*/
         }
         //.ignoresSafeArea(edges: [.leading, .trailing, .bottom])
-#if false
-        .dropDestination(for: URL.self) { items, location in
-            guard let url = items.first else {
-                print("No url specified")
-                return false
-            }
-            
-            guard url.pathExtension.lowercased() == "wad" else {
-                print("Unsupported path extension: \(url.pathExtension)")
-                return false
-            }
-            
-            print("drop \(items) in \(location)")
-            Task {
-                viewModel.loadWAD(at: url)
-            }
-            
-            return true
-        } isTargeted: { inside in
-            //
-        }
-#else
-        .dropDestination(for: TransferItem.self) { items, location in
-            guard let url = items.first else {
-                print("No url specified")
-                return false
-            }
-            
-            guard url.url.pathExtension.lowercased() == "wad" else {
-                print("Unsupported path extension: \(url.url.pathExtension)")
-                return false
-            }
-            
-            //guard let pathUrl = URL(string: url.url.path()) else {
-            //    print("Could not create path url: \(url.url.path())")
-            //    return false
-            //}
-            
-            print("read \(url.url.path())")
-            print("drop \(items) in \(location)")
-            Task {
-                viewModel.loadWAD(at: url.url)
-            }
-            
-            return true
-        } isTargeted: { inside in
-            //
-        }
-#endif
     }
 }
 
@@ -417,15 +424,17 @@ struct ContentView: View {
             ViewportView(viewModel: viewModel)
 #else
             Text("Select an item in the list on the left to see the details")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .wadDropDestination(viewModel)
 #endif
         }
         .navigationSplitViewStyle(.balanced)
-        .task {
-            let timeTaken = await ContinuousClock().measure {
-                await viewModel.loadTestData()
-            }
-            print("Import time taken: \(timeTaken)")
-        }
+        //.task {
+        //    let timeTaken = await ContinuousClock().measure {
+        //        await viewModel.loadTestData()
+        //    }
+        //    print("Import time taken: \(timeTaken)")
+        //}
     }
 }
 

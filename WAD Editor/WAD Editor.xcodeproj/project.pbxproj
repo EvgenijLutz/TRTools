@@ -10,6 +10,8 @@
 		4CA05F572D7A46DF007A4729 /* Cashmere in Frameworks */ = {isa = PBXBuildFile; productRef = 4CA05F562D7A46DF007A4729 /* Cashmere */; };
 		4CCBE7152D74B34E007347CB /* WADKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCBE7142D74B34E007347CB /* WADKit */; };
 		4CCBE7172D74B351007347CB /* Lemur in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCBE7162D74B351007347CB /* Lemur */; };
+		4CFC49F22DAC474C00380601 /* LZ77 in Frameworks */ = {isa = PBXBuildFile; productRef = 4CFC49F12DAC474C00380601 /* LZ77 */; };
+		4CFC49F42DAC474C00380601 /* PNG in Frameworks */ = {isa = PBXBuildFile; productRef = 4CFC49F32DAC474C00380601 /* PNG */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,9 +31,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4CFC49F22DAC474C00380601 /* LZ77 in Frameworks */,
 				4CCBE7172D74B351007347CB /* Lemur in Frameworks */,
 				4CCBE7152D74B34E007347CB /* WADKit in Frameworks */,
 				4CA05F572D7A46DF007A4729 /* Cashmere in Frameworks */,
+				4CFC49F42DAC474C00380601 /* PNG in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -93,6 +97,8 @@
 				4CCBE7142D74B34E007347CB /* WADKit */,
 				4CCBE7162D74B351007347CB /* Lemur */,
 				4CA05F562D7A46DF007A4729 /* Cashmere */,
+				4CFC49F12DAC474C00380601 /* LZ77 */,
+				4CFC49F32DAC474C00380601 /* PNG */,
 			);
 			productName = "WAD Editor";
 			productReference = 4CB093FA2D74AC3C00CEC841 /* WAD Editor.app */;
@@ -106,7 +112,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 1630;
 				TargetAttributes = {
 					4CB093F92D74AC3C00CEC841 = {
 						CreatedOnToolsVersion = 16.2;
@@ -123,6 +129,7 @@
 			mainGroup = 4CB093F12D74AC3C00CEC841;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4CB093FB2D74AC3C00CEC841 /* Products */;
@@ -189,7 +196,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 7N525N28LV;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -250,7 +259,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 7N525N28LV;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -277,11 +288,13 @@
 				CODE_SIGN_ENTITLEMENTS = "WAD Editor/WAD_Editor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"WAD Editor/Preview Content\"";
-				DEVELOPMENT_TEAM = 7N525N28LV;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "WAD Editor";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -316,11 +329,13 @@
 				CODE_SIGN_ENTITLEMENTS = "WAD Editor/WAD_Editor.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"WAD Editor/Preview Content\"";
-				DEVELOPMENT_TEAM = 7N525N28LV;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "WAD Editor";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -370,6 +385,17 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tayloraswift/swift-png";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.4.9;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4CA05F562D7A46DF007A4729 /* Cashmere */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -382,6 +408,16 @@
 		4CCBE7162D74B351007347CB /* Lemur */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Lemur;
+		};
+		4CFC49F12DAC474C00380601 /* LZ77 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */;
+			productName = LZ77;
+		};
+		4CFC49F32DAC474C00380601 /* PNG */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */;
+			productName = PNG;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

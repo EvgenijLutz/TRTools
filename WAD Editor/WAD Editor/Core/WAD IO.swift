@@ -7,6 +7,24 @@
 
 import Foundation
 import WADKit
+import PNG
+
+
+struct IOVector3 {
+    var x: Float
+    var y: Float
+    var z: Float
+    
+    
+    func length() -> Float {
+        return sqrt(x*x + y*y + z*z)
+    }
+    
+    func normalized() -> IOVector3 {
+        let len = length()
+        return .init(x: x / len, y: y / len, z: z / len)
+    }
+}
 
 
 struct DataReader {
@@ -118,6 +136,21 @@ struct DataWriter {
 }
 
 
+extension Collection {
+    var orNothing: Self? {
+        if self.isEmpty {
+            return nil
+        }
+        
+        return self
+    }
+}
+
+
+enum WADExportError: Error {
+    case corruptedImageData
+}
+
 
 extension WAD {
     /// Generates a `glb` file contents that conform to [glTF Validator](https://github.khronos.org/glTF-Validator/) rules.
@@ -146,12 +179,91 @@ extension WAD {
         var buffers: [GLTFBuffer] = []
         var bufferViews: [GLTFBufferView] = []
         var accessors: [GLTFAccessor] = []
+        var images: [GLTFImage] = []
+        var materials: [GLTFMaterial] = []
         var meshes: [GLTFMesh] = []
         var nodes: [GLTFNode] = []
+        var samplers: [GLTFSampler] = []
+        var scenes: [GLTFScene] = []
         var skins: [GLTFSkin] = []
+        var textures: [GLTFTexture] = []
+        
+        
+        // The skins array is not used at the moment. Do something useless here so that the compiler doesnt complain.
+        skins.removeAll()
         
         
         var binaryData = Data()
+        func appendBinaryData(_ data: Data, alignment: Int = 4) {
+            binaryData.append(data)
+            let result = binaryData.count % alignment
+            if result > 0 {
+                binaryData.append(contentsOf: Data(repeating: 0, count: alignment - result))
+            }
+        }
+        
+        
+        // Write images, materials and image data - every albedo texture is a material
+        for texture in convertData.textures {
+            let pngData = try exportPNG(texture.contents, width: convertData.width, height: convertData.height)
+            
+            // Add image data
+            let bufferOffset = binaryData.count
+            //binaryData.append(contentsOf: pngData)
+            appendBinaryData(pngData)
+            
+            let bufferViewIndx = bufferViews.count
+            bufferViews.append(
+                .init(
+                    buffer: 0,
+                    byteOffset: bufferOffset,
+                    byteLength: pngData.count
+                )
+            )
+            
+            let imageIndex = images.count
+            images.append(
+                .init(
+                    mimeType: "image/png",
+                    bufferView: bufferViewIndx
+                )
+            )
+            
+            let samplerIndex = samplers.count
+            samplers.append(
+                .init(
+                    magFilter: .nearest,
+                    minFilter: .nearest,
+                    wrapS: .clampToEdge,
+                    wrapT: .clampToEdge
+                )
+            )
+            
+            let albedoTextureIndex = textures.count
+            textures.append(
+                .init(
+                    sampler: samplerIndex,
+                    source: imageIndex,
+                )
+            )
+            
+            materials.append(
+                .init(
+                    pbrMetallicRoughness: .init(
+                        baseColorTexture: .init(
+                            index: albedoTextureIndex,
+                            texCoord: 0
+                        ),
+                        metallicFactor: 0.2,
+                        roughnessFactor: 0.8
+                    ),
+                    alphaMode: .mask,
+                    alphaCutoff: 0.5,
+                    doubleSided: true
+                )
+            )
+        }
+        
         
         func serializeMesh(_ meshIndex: Int) async throws -> Int {
             // Mesh submeshes
@@ -160,7 +272,7 @@ extension WAD {
             let vertexBuffers = try await self.meshes[meshIndex].generateVertexBuffers(in: self, withRemappedTexturePages: convertData.remapInfo)
             for vertexBuffer in vertexBuffers {
                 var reader = DataReader(vertexBuffer.vertexBuffer)
-                let stride = vertexBuffer.lightingType.stride
+                let stride = vertexBuffer.layoutType.stride
                 
                 var attributes: [String: Int] = [:]
                 
@@ -212,7 +324,7 @@ extension WAD {
                 }
                 
                 // Normals
-                if vertexBuffer.lightingType == .normals || vertexBuffer.lightingType == .normalsWithWeights {
+                if vertexBuffer.layoutType == .normals || vertexBuffer.layoutType == .normalsWithWeights {
                     var writer = DataWriter()
                     
                     for i in 0 ..< vertexBuffer.numVertices {
@@ -247,9 +359,43 @@ extension WAD {
                     binaryData.append(writer.data)
                 }
                 
+                // UVs
+                do {
+                    var writer = DataWriter()
+                    
+                    for i in 0 ..< vertexBuffer.numVertices {
+                        reader.set(i * stride + 12)
+                        let x: Float = try reader.read()
+                        let y: Float = try reader.read()
+                        
+                        writer.write(x)
+                        writer.write(y)
+                    }
+                    
+                    attributes["TEXCOORD_0"] = accessors.count
+                    
+                    accessors.append(.init(
+                        bufferView: bufferViews.count,
+                        byteOffset: 0,
+                        componentType: .float,
+                        count: vertexBuffer.numVertices /*/ 3*/,
+                        type: .vec2
+                    ))
+                    
+                    bufferViews.append(.init(
+                        buffer: 0,
+                        byteOffset: binaryData.count,
+                        byteLength: writer.data.count,
+                        byteStride: 8,
+                        target: .arrayBuffer
+                    ))
+                    
+                    binaryData.append(writer.data)
+                }
+                
                 primitives.append(.init(
                     attributes: attributes,
-                    material: nil,
+                    material: 0,
                     mode: .triangles
                 ))
             }
@@ -301,15 +447,33 @@ extension WAD {
         //attributes["WEIGHTS_0"] = accessors.count
         
         
-        skins.append(.init(
-            skeleton: skeletonRootNode,
-            joints: skeletonJointNodes
-        ))
+//        let skinIndex = skins.count
+//        skins.append(.init(
+//            skeleton: skeletonRootNode,
+//            joints: skeletonJointNodes
+//        ))
+        
+//        let rootNode = nodes.count
+//        nodes.append(
+//            .init(
+//                //skin: skinIndex,
+//                mesh: nodes[skeletonRootNode].mesh
+//            )
+//        )
+        
+        scenes.append(
+            .init(
+                nodes: [skeletonRootNode],
+            )
+        )
         
         
         var animations: [GLTFAnimation] = []
         func exportAnimation(_ animationIndex: Int) {
-            let timeScale = Float(1) / Float(24) * 2
+            /// Keyframe time scale. Relative to Blender's 24 fps
+            let timeScale = Float(1) / Float(60) * 2
+            //let timeScale = Float(1) / Float(30) * 2
+            //let timeScale = Float(1) / Float(24) * 2
             var channels: [GLTFChannel] = []
             var samplers: [GLTFAnimationSampler] = []
             
@@ -353,8 +517,9 @@ extension WAD {
                 return accessorIndex
             }
             
-            func makeSampler(time: Data, values: Data, dataType: GLTFAccessorType, count: Int) -> Int {
-                let timeAccessorIndex = makeAccessor(for: time, of: .scalar, numElements: count, min: 0, max: Float(count - 1) * timeScale)
+            func makeSampler(time: Data, values: Data, dataType: GLTFAccessorType, count: Int, animationTimeScale: Float) -> Int {
+                let max: Float = max(Float(0), Float(count - 1))
+                let timeAccessorIndex = makeAccessor(for: time, of: .scalar, numElements: count, min: 0, max: max * timeScale * animationTimeScale)
                 let dataAccessorIndex = makeAccessor(for: values, of: dataType, numElements: count)
                 
                 let samplerIndex = samplers.count
@@ -370,25 +535,38 @@ extension WAD {
             }
             
             
-            // Translation channel
+            // Serialize translation and rotation keyframes
             do {
+                let animation = animationModel.animations[animationIndex]
+                let animationTimeScale = Float(animation.frameDuration)
+                let keyframeCount = max(1, animation.keyframes.count)
                 
+                // Translation
                 do {
                     var timeWriter = DataWriter()
                     var dataWriter = DataWriter()
                     
-                    let animation = animationModel.animations[animationIndex]
-                    let animationTimeScale = Float(animation.frameDuration)
-                    for (index, keyframe) in animation.keyframes.enumerated() {
-                        timeWriter.write(Float(index) * timeScale * animationTimeScale)
+                    // GLTF requires that an animation should contain at least one keyframe
+                    if animation.keyframes.isEmpty {
+                        timeWriter.write(Float(0))
                         
-                        dataWriter.write(keyframe.offset.x)
-                        dataWriter.write(-keyframe.offset.y)
-                        dataWriter.write(-keyframe.offset.z)
+                        dataWriter.write(Float(0))
+                        dataWriter.write(Float(0))
+                        dataWriter.write(Float(0))
+                    }
+                    else {
+                        for (index, keyframe) in animation.keyframes.enumerated() {
+                            let keyframeTime = Float(index) * timeScale
+                            timeWriter.write(keyframeTime * animationTimeScale)
+                            
+                            dataWriter.write(keyframe.offset.x)
+                            dataWriter.write(-keyframe.offset.y)
+                            dataWriter.write(-keyframe.offset.z)
+                        }
                     }
                     
                     
-                    let sampler = makeSampler(time: timeWriter.data, values: dataWriter.data, dataType: .vec3, count: animation.keyframes.count)
+                    let sampler = makeSampler(time: timeWriter.data, values: dataWriter.data, dataType: .vec3, count: keyframeCount, animationTimeScale: animationTimeScale)
                     channels.append(
                         .init(
                             sampler: sampler,
@@ -401,24 +579,34 @@ extension WAD {
                     )
                 }
                 
+                // Rotation
                 func serializeJointAnimation(_ jointIndex: Int) {
                     var timeWriter = DataWriter()
                     var dataWriter = DataWriter()
                     
-                    let animation = animationModel.animations[animationIndex]
-                    let animationTimeScale = Float(animation.frameDuration)
-                    for (index, keyframe) in animation.keyframes.enumerated() {
-                        timeWriter.write(Float(index) * timeScale * animationTimeScale)
+                    // GLTF requires that an animation should contain at least one keyframe
+                    if animation.keyframes.isEmpty {
+                        timeWriter.write(Float(0))
                         
-                        let rotation = keyframe.rotations[jointIndex].simdQuaternion
-                        dataWriter.write(rotation.vector.x)
-                        dataWriter.write(rotation.vector.y)
-                        dataWriter.write(rotation.vector.z)
-                        dataWriter.write(rotation.vector.w)
+                        dataWriter.write(Float(0))
+                        dataWriter.write(Float(0))
+                        dataWriter.write(Float(0))
+                        dataWriter.write(Float(1))
+                    }
+                    else {
+                        for (index, keyframe) in animation.keyframes.enumerated() {
+                            timeWriter.write(Float(index) * timeScale * animationTimeScale)
+                            
+                            let rotation = keyframe.rotations[jointIndex].simdQuaternion
+                            dataWriter.write(rotation.vector.x)
+                            dataWriter.write(rotation.vector.y)
+                            dataWriter.write(rotation.vector.z)
+                            dataWriter.write(rotation.vector.w)
+                        }
                     }
                     
                     
-                    let sampler = makeSampler(time: timeWriter.data, values: dataWriter.data, dataType: .vec4, count: animation.keyframes.count)
+                    let sampler = makeSampler(time: timeWriter.data, values: dataWriter.data, dataType: .vec4, count: keyframeCount, animationTimeScale: animationTimeScale)
                     channels.append(
                         .init(
                             sampler: sampler,
@@ -441,11 +629,14 @@ extension WAD {
                 .init(channels: channels, samplers: samplers)
             )
         }
+        
+        // Export single animation
         //exportAnimation(animationIndex)
+        
+        // Export all animations
         for index in 0 ..< animationModel.animations.count {
             exportAnimation(index)
         }
-        
         
         
         // Write buffers
@@ -455,7 +646,22 @@ extension WAD {
         
         
         let asset = GLTFAsset(generator: "WAD Editor 1.0.0-alpha1", version: "2.0")
-        let gltf = GLTF(accessors: accessors, animations: animations, asset: asset, buffers: buffers, bufferViews: bufferViews, meshes: meshes, nodes: nodes, skins: skins)
+        let gltf = GLTF(
+            accessors: accessors.orNothing,
+            animations: animations.orNothing,
+            asset: asset,
+            buffers: buffers.orNothing,
+            bufferViews: bufferViews.orNothing,
+            images: images.orNothing,
+            materials: materials.orNothing,
+            meshes: meshes.orNothing,
+            nodes: nodes.orNothing,
+            samplers: samplers.orNothing,
+            scene: scenes.isEmpty ? nil : 0,
+            scenes: scenes.orNothing,
+            skins: skins.orNothing,
+            textures: textures.orNothing
+        )
         let library = GLTFLibrary(gltf: gltf, binaryChunks: [binaryData])
         
         return try await library.exportToGLB()
