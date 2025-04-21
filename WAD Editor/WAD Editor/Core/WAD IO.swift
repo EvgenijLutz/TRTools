@@ -183,7 +183,8 @@ extension WAD {
             throw WADError.modelNotFound
         }
         
-        let convertData = await generateCombinedTexturePages(pagesPerRow: 8)
+        let pagesPerRow = Int(ceil(sqrt(Float(texturePages.count))))
+        let convertData = await generateCombinedTexturePages(pagesPerRow: pagesPerRow)
         
         var buffers: [GLTFBuffer] = []
         var bufferViews: [GLTFBufferView] = []
@@ -274,132 +275,281 @@ extension WAD {
         }
         
         
-        func serializeMesh(_ meshIndex: Int) async throws -> Int {
-            // Mesh submeshes
-            var primitives: [GLTFMeshPrimitive] = []
+        // Model mesh
+        class MeshSlice {
+            // Collect vertex info for calculating min and max - for json validation purposes
+            var xArray: [Float] = []
+            var yArray: [Float] = []
+            var zArray: [Float] = []
+            var numVertices: Int = 0
+            var vertexWriter = DataWriter()
             
+            var normalWriter = DataWriter()
+            var uvWriter = DataWriter()
+            var jointWriter = DataWriter()
+            var weightWriter = DataWriter()
+            
+            let textureIndex: Int
+            let opaque: Bool
+            let doubleSided: Bool
+            let layoutType: WKVertexBuffer.LayoutType
+            
+            init(textureIndex: Int, opaque: Bool, doubleSided: Bool, layoutType: WKVertexBuffer.LayoutType) {
+                self.textureIndex = textureIndex
+                self.opaque = opaque
+                self.doubleSided = doubleSided
+                self.layoutType = layoutType
+            }
+        }
+        var meshSlices: [MeshSlice] = []
+        func findMeshSlice(for vertexBuffer: WKVertexBuffer) -> MeshSlice {
+            for meshSlice in meshSlices {
+                if meshSlice.textureIndex == vertexBuffer.textureIndex &&
+                    meshSlice.opaque == vertexBuffer.opaque &&
+                    meshSlice.doubleSided == vertexBuffer.doubleSided &&
+                    meshSlice.layoutType == vertexBuffer.layoutType {
+                    return meshSlice
+                }
+            }
+            
+            let slice = MeshSlice(textureIndex: vertexBuffer.textureIndex, opaque: vertexBuffer.opaque, doubleSided: vertexBuffer.doubleSided, layoutType: vertexBuffer.layoutType)
+            meshSlices.append(slice)
+            return slice
+        }
+        
+        func serializeMesh(_ meshIndex: Int, withOffset offset: WKVector, forJointAt jointIndex: Int) async throws {
             let vertexBuffers = try await self.meshes[meshIndex].generateVertexBuffers(in: self, withRemappedTexturePages: convertData.remapInfo)
             for vertexBuffer in vertexBuffers {
+                let slice = findMeshSlice(for: vertexBuffer)
+                slice.numVertices += vertexBuffer.numVertices
+                
                 var reader = DataReader(vertexBuffer.vertexBuffer)
                 let stride = vertexBuffer.layoutType.stride
                 
-                var attributes: [String: Int] = [:]
-                
                 // Vertices
-                do {
-                    var writer = DataWriter()
+                for i in 0 ..< vertexBuffer.numVertices {
+                    reader.set(i * stride)
+                    let x: Float = try reader.read() + offset.x
+                    let y: Float = try reader.read() - offset.y
+                    let z: Float = try reader.read() - offset.z
                     
-                    // Collect vertex info for calculating min and max - for json validation purposes
-                    var xArray: [Float] = []
-                    var yArray: [Float] = []
-                    var zArray: [Float] = []
+                    slice.vertexWriter.write(x)
+                    slice.vertexWriter.write(y)
+                    slice.vertexWriter.write(z)
                     
-                    for i in 0 ..< vertexBuffer.numVertices {
-                        reader.set(i * stride)
-                        let x: Float = try reader.read()
-                        let y: Float = try reader.read()
-                        let z: Float = try reader.read()
-                        
-                        writer.write(x)
-                        writer.write(y)
-                        writer.write(z)
-                        
-                        xArray.append(x)
-                        yArray.append(y)
-                        zArray.append(z)
-                    }
-                    
-                    attributes["POSITION"] = accessors.count
-                    
-                    accessors.append(.init(
-                        bufferView: bufferViews.count,
-                        byteOffset: 0,
-                        componentType: .float,
-                        count: vertexBuffer.numVertices /*/ 3*/,
-                        type: .vec3,
-                        max: [xArray.max() ?? 0, yArray.max() ?? 0, zArray.max() ?? 0],
-                        min: [xArray.min() ?? 0, yArray.min() ?? 0, zArray.min() ?? 0]
-                    ))
-                    
-                    bufferViews.append(.init(
-                        buffer: 0,
-                        byteOffset: binaryData.count,
-                        byteLength: writer.data.count,
-                        byteStride: 12,
-                        target: .arrayBuffer
-                    ))
-                    
-                    binaryData.append(writer.data)
+                    slice.xArray.append(x)
+                    slice.yArray.append(y)
+                    slice.zArray.append(z)
                 }
                 
                 // Normals
                 if vertexBuffer.layoutType == .normals || vertexBuffer.layoutType == .normalsWithWeights {
-                    var writer = DataWriter()
-                    
                     for i in 0 ..< vertexBuffer.numVertices {
                         reader.set(i * stride + 20)
                         let x: Float = try reader.read()
                         let y: Float = try reader.read()
                         let z: Float = try reader.read()
                         
-                        writer.write(x)
-                        writer.write(y)
-                        writer.write(z)
+                        slice.normalWriter.write(x)
+                        slice.normalWriter.write(y)
+                        slice.normalWriter.write(z)
                     }
+                }
+                
+                // UVs
+                for i in 0 ..< vertexBuffer.numVertices {
+                    reader.set(i * stride + 12)
+                    let x: Float = try reader.read()
+                    let y: Float = try reader.read()
                     
+                    slice.uvWriter.write(x)
+                    slice.uvWriter.write(y)
+                }
+                
+                // Joints and weights
+                for _ in 0 ..< vertexBuffer.numVertices {
+                    slice.jointWriter.write(UInt16(jointIndex))
+                    slice.jointWriter.write(UInt16(0))
+                    slice.jointWriter.write(UInt16(0))
+                    slice.jointWriter.write(UInt16(0))
+                    
+                    slice.weightWriter.write(Float(1))
+                    slice.weightWriter.write(Float(0))
+                    slice.weightWriter.write(Float(0))
+                    slice.weightWriter.write(Float(0))
+                }
+                
+            }
+        }
+        
+        var nodeRemapInfo: [Int] = []
+        func node(for jointIndex: Int) -> Int {
+            return nodeRemapInfo[jointIndex]
+        }
+        
+        /// Data to build inverse matrices
+        struct JointOffset {
+            var offset: WKVector
+        }
+        var jointOffsets: [JointOffset] = []
+        
+        var skeletonJointNodes: [Int] = []
+        func serializeJoint(_ joint: WKJoint, name: String? = nil, globalOffset: WKVector = .init()) async throws -> Int {
+            let offset = globalOffset + joint.offset
+            
+            var childNodes: [Int] = []
+            
+            for child in joint.joints.reversed() {
+                let childNode = try await serializeJoint(child, globalOffset: offset)
+                childNodes.append(childNode)
+            }
+            
+            let jointNodeIndex = nodes.count
+            try await serializeMesh(joint.mesh, withOffset: offset, forJointAt: nodeRemapInfo.count)
+            nodes.append(.init(
+                children: childNodes.isEmpty ? nil : childNodes,
+                rotation: [0,0,0,1],
+                scale: [1,1,1],
+                translation: [joint.offset.x, -joint.offset.y, -joint.offset.z],
+                name: name
+            ))
+            
+            // Return index of the last generated node
+            skeletonJointNodes.append(jointNodeIndex)
+            jointOffsets.append(.init(offset: offset))
+            
+            // Append node remap info
+            nodeRemapInfo.insert(jointNodeIndex, at: 0)
+            
+            return jointNodeIndex
+        }
+        let skeletonRootNode = try await serializeJoint(rootJoint, name: String(describing: modelTyle) + "-skeleton")
+        
+        
+        // MARK: Write mesh data
+        let modelMeshIndex = meshes.count
+        do {
+            // Mesh submeshes
+            var primitives: [GLTFMeshPrimitive] = []
+            
+            for meshSlice in meshSlices {
+                var attributes: [String: Int] = [:]
+                
+                // Vertices
+                do {
+                    attributes["POSITION"] = accessors.count
+                    
+                    accessors.append(.init(
+                        bufferView: bufferViews.count,
+                        byteOffset: 0,
+                        componentType: .float,
+                        count: meshSlice.numVertices /*/ 3*/,
+                        type: .vec3,
+                        max: [meshSlice.xArray.max() ?? 0, meshSlice.yArray.max() ?? 0, meshSlice.zArray.max() ?? 0],
+                        min: [meshSlice.xArray.min() ?? 0, meshSlice.yArray.min() ?? 0, meshSlice.zArray.min() ?? 0]
+                    ))
+                    
+                    bufferViews.append(.init(
+                        buffer: 0,
+                        byteOffset: binaryData.count,
+                        byteLength: meshSlice.vertexWriter.data.count,
+                        byteStride: 12,
+                        target: .arrayBuffer
+                    ))
+                    
+                    binaryData.append(meshSlice.vertexWriter.data)
+                }
+                
+                // Normals
+                if meshSlice.layoutType == .normals || meshSlice.layoutType == .normalsWithWeights {
                     attributes["NORMAL"] = accessors.count
                     
                     accessors.append(.init(
                         bufferView: bufferViews.count,
                         byteOffset: 0,
                         componentType: .float,
-                        count: vertexBuffer.numVertices /*/ 3*/,
+                        count: meshSlice.numVertices /*/ 3*/,
                         type: .vec3
                     ))
                     
                     bufferViews.append(.init(
                         buffer: 0,
                         byteOffset: binaryData.count,
-                        byteLength: writer.data.count,
+                        byteLength: meshSlice.normalWriter.data.count,
                         byteStride: 12,
                         target: .arrayBuffer
                     ))
                     
-                    binaryData.append(writer.data)
+                    binaryData.append(meshSlice.normalWriter.data)
                 }
                 
                 // UVs
                 do {
-                    var writer = DataWriter()
-                    
-                    for i in 0 ..< vertexBuffer.numVertices {
-                        reader.set(i * stride + 12)
-                        let x: Float = try reader.read()
-                        let y: Float = try reader.read()
-                        
-                        writer.write(x)
-                        writer.write(y)
-                    }
-                    
                     attributes["TEXCOORD_0"] = accessors.count
                     
                     accessors.append(.init(
                         bufferView: bufferViews.count,
                         byteOffset: 0,
                         componentType: .float,
-                        count: vertexBuffer.numVertices /*/ 3*/,
+                        count: meshSlice.numVertices /*/ 3*/,
                         type: .vec2
                     ))
                     
                     bufferViews.append(.init(
                         buffer: 0,
                         byteOffset: binaryData.count,
-                        byteLength: writer.data.count,
+                        byteLength: meshSlice.uvWriter.data.count,
                         byteStride: 8,
                         target: .arrayBuffer
                     ))
                     
-                    binaryData.append(writer.data)
+                    binaryData.append(meshSlice.uvWriter.data)
+                }
+                
+                // Joints
+                do {
+                    attributes["JOINTS_0"] = accessors.count
+                    
+                    accessors.append(.init(
+                        bufferView: bufferViews.count,
+                        byteOffset: 0,
+                        componentType: .unsignedShort,
+                        count: meshSlice.numVertices /*/ 3*/,
+                        type: .vec4
+                    ))
+                    
+                    bufferViews.append(.init(
+                        buffer: 0,
+                        byteOffset: binaryData.count,
+                        byteLength: meshSlice.jointWriter.data.count,
+                        byteStride: 8,
+                        target: .arrayBuffer
+                    ))
+                    
+                    binaryData.append(meshSlice.jointWriter.data)
+                }
+                
+                // Weights
+                do {
+                    attributes["WEIGHTS_0"] = accessors.count
+                    
+                    accessors.append(.init(
+                        bufferView: bufferViews.count,
+                        byteOffset: 0,
+                        componentType: .float,
+                        count: meshSlice.numVertices /*/ 3*/,
+                        type: .vec4
+                    ))
+                    
+                    bufferViews.append(.init(
+                        buffer: 0,
+                        byteOffset: binaryData.count,
+                        byteLength: meshSlice.weightWriter.data.count,
+                        byteStride: 16,
+                        target: .arrayBuffer
+                    ))
+                    
+                    binaryData.append(meshSlice.weightWriter.data)
                 }
                 
                 primitives.append(.init(
@@ -409,71 +559,72 @@ extension WAD {
                 ))
             }
             
-            let gltfMeshIndex = meshes.count
             meshes.append(.init(
-                primitives: primitives
+                primitives: primitives,
+                name: String(describing: modelTyle) + "-mesh"
             ))
-            
-            return gltfMeshIndex
         }
         
-        var nodeRemapInfo: [Int] = []
-        func node(for jointIndex: Int) -> Int {
-            return nodeRemapInfo[jointIndex]
-        }
         
-        var skeletonJointNodes: [Int] = []
-        func serializeJoint(_ joint: WKJoint, name: String? = nil) async throws -> Int {
-            var childNodes: [Int] = []
+        // MARK: Inverse bind matrices
+        let inverseBindMatricesIndex = accessors.count
+        do {
+            var dataWriter = DataWriter()
             
-            for child in joint.joints.reversed() {
-                let childNode = try await serializeJoint(child)
-                childNodes.append(childNode)
+            for jointOffset in jointOffsets {
+                // Matrices are stored in the column-major order
+                let inverseBindMatrix: [Float] = [
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    //jointOffset.offset.x, -jointOffset.offset.y, -jointOffset.offset.z, 1
+                    -jointOffset.offset.x, jointOffset.offset.y, jointOffset.offset.z, 1
+                    //0, 0, 0, 1
+                ]
+                
+                for item in inverseBindMatrix {
+                    dataWriter.write(item)
+                }
             }
             
-            let gltfMeshIndex = try await serializeMesh(joint.mesh)
-            nodes.append(.init(
-                children: childNodes.isEmpty ? nil : childNodes,
-                mesh: gltfMeshIndex,
-                rotation: [0,0,0,1],
-                scale: [1,1,1],
-                translation: [joint.offset.x, -joint.offset.y, -joint.offset.z],
-                name: name
+            accessors.append(.init(
+                bufferView: bufferViews.count,
+                byteOffset: 0,
+                componentType: .float,
+                count: jointOffsets.count,
+                type: .mat4
             ))
             
-            // Return index of the last generated node
-            let jointNode = nodes.count - 1
-            skeletonJointNodes.append(jointNode)
+            bufferViews.append(.init(
+                buffer: 0,
+                byteOffset: binaryData.count,
+                byteLength: dataWriter.data.count,
+                //byteStride: 64,
+                //target: .arrayBuffer
+            ))
             
-            // Append node remap info
-            nodeRemapInfo.insert(jointNode, at: 0)
-            
-            return jointNode
+            binaryData.append(dataWriter.data)
         }
-        let skeletonRootNode = try await serializeJoint(rootJoint, name: String(describing: modelTyle))
-        
-        // Skinning
-        //attributes["JOINTS_0"] = accessors.count
-        //attributes["WEIGHTS_0"] = accessors.count
         
         
-//        let skinIndex = skins.count
-//        skins.append(.init(
-//            skeleton: skeletonRootNode,
-//            joints: skeletonJointNodes
-//        ))
+        let skinIndex = skins.count
+        skins.append(.init(
+            inverseBindMatrices: inverseBindMatricesIndex,
+            skeleton: skeletonRootNode,
+            joints: skeletonJointNodes
+        ))
         
-//        let rootNode = nodes.count
-//        nodes.append(
-//            .init(
-//                //skin: skinIndex,
-//                mesh: nodes[skeletonRootNode].mesh
-//            )
-//        )
+        let rootNode = nodes.count
+        nodes.append(
+            .init(
+                skin: skinIndex,
+                mesh: modelMeshIndex
+            )
+        )
         
         scenes.append(
             .init(
-                nodes: [skeletonRootNode],
+                nodes: [rootNode, skeletonRootNode],
             )
         )
         
@@ -644,13 +795,15 @@ extension WAD {
             )
         }
         
+#if false
         // Export single animation
-        //exportAnimation(animationIndex)
-        
+        exportAnimation(0)
+#else
         // Export all animations
         for index in 0 ..< animationModel.animations.count {
             exportAnimation(index)
         }
+#endif
         
         
         // Write buffers

@@ -409,6 +409,7 @@ struct GLTFBuffer: Sendable, Codable {
 
 // MARK: Buffer views
 
+/// The hint representing the intended GPU buffer type to use with this buffer view.
 enum GLTFBufferViewTarget: Int, Codable {
     case arrayBuffer = 34962
     case elementArrayBuffer = 34963
