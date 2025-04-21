@@ -102,6 +102,21 @@ extension NavigatorVC: UICollectionViewDelegate {
 }
 
 
+extension NavigatorVC: UICollectionViewDragDelegate {
+    func collectionView(_ collectionView: UICollectionView, itemsForBeginning session: any UIDragSession, at indexPath: IndexPath) -> [UIDragItem] {
+        guard let item = dataSource.itemIdentifier(for: indexPath) else {
+            return []
+        }
+        
+        guard item.shared else {
+            return []
+        }
+        
+        return [UIDragItem(itemProvider: .init(object: item.name as NSString))]
+    }
+}
+
+
 extension NavigatorVC: NavigatorItemProviderDelegate {
     func navigatorItemSetItems(_ items: [NavigatorItem]) {
         data = items

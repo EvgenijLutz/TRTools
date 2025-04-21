@@ -34,5 +34,28 @@ struct WADEditorApp: App {
             //NavigatorTestView()
             ContentView()
         }
+        .commands {
+            CommandGroup(before: .importExport) {
+                Button {
+                    //
+                } label: {
+                    Text("Import test WAD")
+                }
+                
+                Button {
+                    //
+                } label: {
+                    Text("Import...")
+                }
+            }
+            
+            //CommandMenu("File") {
+            //    Button {
+            //        //
+            //    } label: {
+            //        Text("Import...")
+            //    }
+            //}
+        }
     }
 }

@@ -152,6 +152,7 @@ class NavigationOutline: NSViewController {
     private var data: [NavigatorItem] = []
     
     var itemSelected: (_ item: NavigatorItem) -> Void = { _ in }
+    var exportItemAction: (_ item: NavigatorItem) -> NSFilePromiseProvider? = { _ in return nil }
     
     
     required init?(coder: NSCoder) {
@@ -212,6 +213,10 @@ class NavigationOutline: NSViewController {
         scrollView.drawsBackground = false
 
         view.addSubview(scrollView)
+        
+        
+        // Jesus fucking christ
+        outlineView.setDraggingSourceOperationMask(.copy, forLocal: false)
     }
     
 }
@@ -342,6 +347,47 @@ extension NavigationOutline: NSOutlineViewDelegate, NSOutlineViewDataSource {
         
         itemSelected(item)
     }
+    
+    
+    // MARK: Drag & drop
+    
+    func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> (any NSPasteboardWriting)? {
+        print("pasteboardWriterForItem")
+        
+        // Cast item to the type we need to work with
+        guard let item = item as? NavigatorItem else {
+            return nil
+        }
+        
+        // Check if item is sharable
+        guard item.shared else {
+            return nil
+        }
+        
+//        let pItem = NSPasteboardItem()
+//        pItem.setString(item.name, forType: .string)
+//        return pItem
+        
+        //return item.name as NSString
+        
+        return exportItemAction(item)
+    }
+    
+    
+    func outlineView(_ outlineView: NSOutlineView, updateDraggingItemsForDrag draggingInfo: any NSDraggingInfo) {
+        print("updateDraggingItemsForDrag")
+    }
+    
+    
+    func outlineView(_ outlineView: NSOutlineView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forItems draggedItems: [Any]) {
+        print("willBeginAt screenPoint: \(screenPoint) forItems: \(draggedItems.count)")
+    }
+    
+    
+    func outlineView(_ outlineView: NSOutlineView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        print("endedAt screenPoint: \(screenPoint) operation: \(operation)")
+    }
+    
 }
 
 
@@ -359,16 +405,19 @@ extension NavigationOutline: NavigatorItemProviderDelegate {
 struct NavigatorTestView: NSViewControllerRepresentable {
     var dataProvider: NavigatorItemProvider?
     var itemSelected: (_ item: NavigatorItem) -> Void = { _ in }
+    var exportItemAction: (_ item: NavigatorItem) -> NSFilePromiseProvider? = { _ in return nil }
     
     func makeNSViewController(context: Context) -> NavigationOutline {
         let vc = NavigationOutline()
         dataProvider?.delegate = vc
         vc.itemSelected = itemSelected
+        vc.exportItemAction = exportItemAction
         return vc
     }
     
     func updateNSViewController(_ nsViewController: NavigationOutline, context: Context) {
-        //
+        nsViewController.itemSelected = itemSelected
+        nsViewController.exportItemAction = exportItemAction
     }
 }
 
@@ -377,16 +426,19 @@ struct NavigatorTestView: NSViewControllerRepresentable {
 struct NavigatorTestView: NSViewControllerRepresentable {
     var dataProvider: NavigatorItemProvider?
     var itemSelected: (_ item: NavigatorItem) -> Void = { _ in }
+    var exportItemAction: (_ item: NavigatorItem) -> NSFilePromiseProvider? = { _ in return nil }
     
     func makeNSViewController(context: Context) -> NavigatorVC {
         let vc = NavigatorVC()
         dataProvider?.delegate = vc
         vc.itemSelected = itemSelected
+        vc.exportItemAction = exportItemAction
         return vc
     }
     
     func updateNSViewController(_ nsViewController: NavigatorVC, context: Context) {
-        //
+        nsViewController.itemSelected = itemSelected
+        nsViewController.exportItemAction = exportItemAction
     }
 }
 

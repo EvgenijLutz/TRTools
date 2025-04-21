@@ -11,6 +11,7 @@ import Lemur
 import Observation
 import Combine
 import Cashmere
+import UniformTypeIdentifiers
 
 
 enum MeshType {
@@ -38,6 +39,7 @@ struct NavigatorItem: Identifiable, Hashable {
         
     var name: String
     var value: EditorItemType
+    var shared: Bool = false
     var items: [NavigatorItem]? = nil
     
     nonisolated func hash(into hasher: inout Hasher) {
@@ -62,6 +64,84 @@ class NavigatorItemProvider {
 }
 
 
+enum GLTFExportError: Error {
+    case dataNotFound
+    case unsupportedItemType
+}
+
+class GLTFExportData {
+    let wad: WAD
+    let item: NavigatorItem
+    
+    init(wad: WAD, item: NavigatorItem) {
+        self.wad = wad
+        self.item = item
+    }
+}
+
+class GLTFExportPromise: NSObject, NSFilePromiseProviderDelegate {
+    deinit {
+        print("Deinit promise")
+    }
+    
+    
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+        guard let data = filePromiseProvider.userInfo as? GLTFExportData else {
+            return "file.glb"
+        }
+        
+        func modelName(for modelIndex: Int) -> String {
+            guard let identifier = data.wad.findModel(modelIndex)?.identifier else {
+                return "Model #\(modelIndex)"
+            }
+            
+            return String(describing: identifier)
+        }
+        
+        let name = switch data.item.value {
+        case .section: "Section"
+        case .texturePage(let textureIndex): "Texture #\(textureIndex)"
+        case .mesh(let meshIndex, _): "Mesh #\(meshIndex)"
+        case .model(let modelIndex): modelName(for: modelIndex)
+        case .animation(_, let animationIndex): "Animation #\(animationIndex)"
+        case .staticObject(let staticObject): String(describing: staticObject)
+        }
+        
+        return name + ".glb"
+    }
+    
+    
+//    nonisolated func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping ((any Error)?) -> Void) {
+//        do {
+//            try "suck a dick".write(to: url, atomically: true, encoding: .utf8)
+//            completionHandler(nil)
+//        }
+//        catch {
+//            completionHandler(error)
+//        }
+//    }
+    
+    
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL) async throws {
+        guard let data = filePromiseProvider.userInfo as? GLTFExportData else {
+            throw GLTFExportError.dataNotFound
+        }
+        
+        switch data.item.value {
+        case .model(let modelIndex):
+            let data = try await data.wad.exportGLTFModel(modelIndex)
+            try data.write(to: url)
+            //try "suck a dick".write(to: url, atomically: true, encoding: .utf8)
+            
+        default:
+            throw GLTFExportError.unsupportedItemType
+        }
+        
+    }
+    
+}
+
+
 @MainActor
 @Observable class ViewModel {
     let editor = Editor()
@@ -73,8 +153,14 @@ class NavigatorItemProvider {
     var navigatorList: [NavigatorItem] = []
     var selection: UUID? = nil
     
+    let gltfPromise = GLTFExportPromise()
+    
     
     init() {
+    }
+    
+    deinit {
+        print("Deinit")
     }
     
     
@@ -128,7 +214,7 @@ class NavigatorItemProvider {
             
                 .init(name: "Models", value: .section, items: wad.models/*.prefix(30)*/.enumerated().map({ (modelIndex, model) in
                     let name = String(describing: model.identifier)
-                    return NavigatorItem(name: name, value: .model(modelIndex), items: [
+                    return NavigatorItem(name: name, value: .model(modelIndex), shared: true, items: [
                         .init(name: "Skeleton", value: .section),
                         .init(name: "Animations", value: .section, items: model.animations/*.prefix(30)*/.enumerated().map({ (animationIndex, animation) in
                                 .init(name: "Animation #\(animationIndex)", value: .animation(model: modelIndex, animation: animationIndex))
@@ -206,12 +292,19 @@ class NavigatorItemProvider {
 }
 
 
+extension UTType {
+    /// TRLE WAD file format. Defined in the Project settings -> Info
+    static let wad = UTType(importedAs: "com.coredesign.custom-file-extensions.wad")
+}
+
+
 struct TransferItem: Transferable, Equatable, Sendable {
     
     public var url: URL
     
     static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(importedContentType: .item) { item in
+        FileRepresentation(importedContentType: .wad) { item in
+            print("Invoke transferRepresentation")
             let name = item.file.lastPathComponent
             let tmpUrl = FileManager.default.temporaryDirectory.appending(component: name)
             if FileManager.default.fileExists(atPath: tmpUrl.path()) {
@@ -222,49 +315,19 @@ struct TransferItem: Transferable, Equatable, Sendable {
             
             return .init(url: tmpUrl)
         }
-//        FileRepresentation(contentType: .item) { item in
-//            SentTransferredFile(item.url)
-//        } importing: { received in
-//            @Dependency(\.fileClient) var fileClient
-//            let temporaryFolder = fileClient.temporaryReplacementDirectory(received.file)
-//            let temporaryURL = temporaryFolder.appendingPathComponent(received.file.lastPathComponent)
-//            let url = try fileClient.copyItemToUniqueURL(at: received.file, to: temporaryURL)
-//            return Self(url)
-//        }
     }
 }
 
 
 extension View {
     func wadDropDestination(_ viewModel: ViewModel) -> some View {
-#if false
-        self.dropDestination(for: URL.self) { items, location in
-            guard let url = items.first else {
-                print("No url specified")
-                return false
-            }
-            
-            guard url.pathExtension.lowercased() == "wad" else {
-                print("Unsupported path extension: \(url.pathExtension)")
-                return false
-            }
-            
-            print("drop \(items) in \(location)")
-            Task {
-                viewModel.loadWAD(at: url)
-            }
-            
-            return true
-        } isTargeted: { inside in
-            //
-        }
-#else
         self.dropDestination(for: TransferItem.self) { items, location in
             guard let url = items.first else {
                 print("No url specified")
                 return false
             }
             
+            // Make sure that the file has .wad extension. Should actually never happen, since the TransferItem struct already restricts the file type
             guard url.url.pathExtension.lowercased() == "wad" else {
                 print("Unsupported path extension: \(url.url.pathExtension)")
                 return false
@@ -285,8 +348,8 @@ extension View {
         } isTargeted: { inside in
             //
         }
-#endif
     }
+    
 }
 
 
@@ -300,7 +363,7 @@ struct ViewportView: View {
             SwiftUIGraphicsView(canvas: viewModel.editor.canvas, delegate: viewModel.editor, inputManager: viewModel.editor.inputManager)
                 .wadDropDestination(viewModel)
             
-            /*
+#if false
             VStack(spacing: 0) {
 #if os(macOS)
                 let separator = Color(.separatorColor)
@@ -346,7 +409,8 @@ struct ViewportView: View {
                 }
                 .ignoresSafeArea()
                 .transition(.move(edge: .bottom))
-            }*/
+            }
+#endif
         }
         //.ignoresSafeArea(edges: [.leading, .trailing, .bottom])
     }
@@ -358,8 +422,7 @@ struct ContentView: View {
     
     @State var meshesExpanded: Bool = true
     @State var path = NavigationPath()
-    
-    @State var navValue: Bool = true
+    @State var navValue: Bool = false
     
     
     var body: some View {
@@ -369,7 +432,11 @@ struct ContentView: View {
             //    Text(navValue ?? "none")
             //}
             
-            NavigatorTestView(dataProvider: viewModel.provider) { item in
+            NavigatorTestView(dataProvider: viewModel.provider) { [weak viewModel] item in
+                guard let viewModel else {
+                    return
+                }
+                
                 switch item.value {
                 case .section:
                     break
@@ -400,12 +467,35 @@ struct ContentView: View {
                 //else {
                 //    navValue = false
                 //}
+            } exportItemAction: { [weak viewModel] item in
+                guard let viewModel else {
+                    return nil
+                }
+                
+                guard let wad = viewModel.editor.wad else {
+                    return nil
+                }
+                
+                //let provider = NSFilePromiseProvider(fileType: UTType.url.identifier, delegate: viewModel.gltfPromise)
+                let provider = NSFilePromiseProvider(fileType: "org.khronos.gltf.glb", delegate: viewModel.gltfPromise)
+                provider.userInfo = GLTFExportData(wad: wad, item: item)
+                return provider
             }
             .ignoresSafeArea()
             .navigationTitle("WAD Editor")
             .navigationDestination(isPresented: $navValue) {
                 ViewportView(viewModel: viewModel)
             }
+            // Import wad
+            //.toolbar {
+            //    ToolbarItem(placement: .navigation) {
+            //        Button {
+            //            //
+            //        } label: {
+            //            Image(systemName: "square.and.arrow.down")
+            //        }
+            //    }
+            //}
 #elseif true
             // Combinatoric hell
             List(selection: $viewModel.selection) {
@@ -423,18 +513,22 @@ struct ContentView: View {
 #if false
             ViewportView(viewModel: viewModel)
 #else
-            Text("Select an item in the list on the left to see the details")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .wadDropDestination(viewModel)
+            ZStack(alignment: .center) {
+                Text("Select an item in the list on the left to see the details")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 #endif
         }
         .navigationSplitViewStyle(.balanced)
-        //.task {
-        //    let timeTaken = await ContinuousClock().measure {
-        //        await viewModel.loadTestData()
-        //    }
-        //    print("Import time taken: \(timeTaken)")
-        //}
+#if DEBUG
+        .task {
+            let timeTaken = await ContinuousClock().measure {
+                await viewModel.loadTestData()
+            }
+            print("Import time taken: \(timeTaken)")
+        }
+#endif
+        .wadDropDestination(viewModel)
     }
 }
 

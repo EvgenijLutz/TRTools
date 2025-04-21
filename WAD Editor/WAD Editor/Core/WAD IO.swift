@@ -7,7 +7,6 @@
 
 import Foundation
 import WADKit
-import PNG
 
 
 struct IOVector3 {
@@ -149,12 +148,22 @@ extension Collection {
 
 enum WADExportError: Error {
     case corruptedImageData
+    case indexOutOfBounds(_ indx: Int)
 }
 
 
 extension WAD {
+    func exportGLTFModel(_ modelIndex: Int) async throws -> Data {
+        guard modelIndex >= 0 && modelIndex < models.count else {
+            throw WADExportError.indexOutOfBounds(modelIndex)
+        }
+        
+        let model = models[modelIndex]
+        return try await exportGLTFModel(model.identifier)
+    }
+    
     /// Generates a `glb` file contents that conform to [glTF Validator](https://github.khronos.org/glTF-Validator/) rules.
-    func exportGLTFAnimation(_ animationIndex: Int, of modelTyle: TR4ObjectType) async throws -> Data {
+    func exportGLTFModel(_ modelTyle: TR4ObjectType) async throws -> Data {
         guard let animationModel = findModel(modelTyle) else {
             throw WADError.modelNotFound
         }
@@ -259,7 +268,7 @@ extension WAD {
                     ),
                     alphaMode: .mask,
                     alphaCutoff: 0.5,
-                    doubleSided: true
+                    doubleSided: false
                 )
             )
         }
@@ -414,7 +423,7 @@ extension WAD {
         }
         
         var skeletonJointNodes: [Int] = []
-        func serializeJoint(_ joint: WKJoint) async throws -> Int {
+        func serializeJoint(_ joint: WKJoint, name: String? = nil) async throws -> Int {
             var childNodes: [Int] = []
             
             for child in joint.joints.reversed() {
@@ -428,7 +437,8 @@ extension WAD {
                 mesh: gltfMeshIndex,
                 rotation: [0,0,0,1],
                 scale: [1,1,1],
-                translation: [joint.offset.x, -joint.offset.y, -joint.offset.z]
+                translation: [joint.offset.x, -joint.offset.y, -joint.offset.z],
+                name: name
             ))
             
             // Return index of the last generated node
@@ -440,7 +450,7 @@ extension WAD {
             
             return jointNode
         }
-        let skeletonRootNode = try await serializeJoint(rootJoint)
+        let skeletonRootNode = try await serializeJoint(rootJoint, name: String(describing: modelTyle))
         
         // Skinning
         //attributes["JOINTS_0"] = accessors.count
@@ -626,7 +636,11 @@ extension WAD {
             
             
             animations.append(
-                .init(channels: channels, samplers: samplers)
+                .init(
+                    channels: channels,
+                    samplers: samplers,
+                    name: "Animation #\(animationIndex)"
+                )
             )
         }
         
