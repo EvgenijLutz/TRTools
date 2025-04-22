@@ -7,9 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4CA05F572D7A46DF007A4729 /* Cashmere in Frameworks */ = {isa = PBXBuildFile; productRef = 4CA05F562D7A46DF007A4729 /* Cashmere */; };
-		4CCBE7152D74B34E007347CB /* WADKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCBE7142D74B34E007347CB /* WADKit */; };
-		4CCBE7172D74B351007347CB /* Lemur in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCBE7162D74B351007347CB /* Lemur */; };
+		4CCF1EC82DB6C7600054F491 /* TRToolsDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCF1EC72DB6C7600054F491 /* TRToolsDependencies */; };
 		4CFC49F22DAC474C00380601 /* LZ77 in Frameworks */ = {isa = PBXBuildFile; productRef = 4CFC49F12DAC474C00380601 /* LZ77 */; };
 		4CFC49F42DAC474C00380601 /* PNG in Frameworks */ = {isa = PBXBuildFile; productRef = 4CFC49F32DAC474C00380601 /* PNG */; };
 /* End PBXBuildFile section */
@@ -32,10 +30,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				4CFC49F22DAC474C00380601 /* LZ77 in Frameworks */,
-				4CCBE7172D74B351007347CB /* Lemur in Frameworks */,
-				4CCBE7152D74B34E007347CB /* WADKit in Frameworks */,
-				4CA05F572D7A46DF007A4729 /* Cashmere in Frameworks */,
 				4CFC49F42DAC474C00380601 /* PNG in Frameworks */,
+				4CCF1EC82DB6C7600054F491 /* TRToolsDependencies in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,11 +90,9 @@
 			);
 			name = "WAD Editor";
 			packageProductDependencies = (
-				4CCBE7142D74B34E007347CB /* WADKit */,
-				4CCBE7162D74B351007347CB /* Lemur */,
-				4CA05F562D7A46DF007A4729 /* Cashmere */,
 				4CFC49F12DAC474C00380601 /* LZ77 */,
 				4CFC49F32DAC474C00380601 /* PNG */,
+				4CCF1EC72DB6C7600054F491 /* TRToolsDependencies */,
 			);
 			productName = "WAD Editor";
 			productReference = 4CB093FA2D74AC3C00CEC841 /* WAD Editor.app */;
@@ -399,17 +393,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		4CA05F562D7A46DF007A4729 /* Cashmere */ = {
+		4CCF1EC72DB6C7600054F491 /* TRToolsDependencies */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = Cashmere;
-		};
-		4CCBE7142D74B34E007347CB /* WADKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = WADKit;
-		};
-		4CCBE7162D74B351007347CB /* Lemur */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Lemur;
+			productName = TRToolsDependencies;
 		};
 		4CFC49F12DAC474C00380601 /* LZ77 */ = {
 			isa = XCSwiftPackageProductDependency;

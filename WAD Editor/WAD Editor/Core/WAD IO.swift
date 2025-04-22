@@ -179,6 +179,17 @@ extension WAD {
             return animationModel
         }()
         
+        let skinJointsModel: WKModel? = {
+            if modelTyle == .LARA {
+                guard let skinJointsModel = findModel(.LARA_SKIN_JOINTS) else {
+                    return nil
+                }
+                return skinJointsModel
+            }
+        
+            return nil
+        }()
+        
         guard let rootJoint = model.rootJoint else {
             throw WADError.modelNotFound
         }
@@ -317,8 +328,8 @@ extension WAD {
             return slice
         }
         
-        func serializeMesh(_ meshIndex: Int, withOffset offset: WKVector, forJointAt jointIndex: Int) async throws {
-            let vertexBuffers = try await self.meshes[meshIndex].generateVertexBuffers(in: self, withRemappedTexturePages: convertData.remapInfo)
+        func serializeMesh(_ meshIndex: Int, withOffset offset: WKVector, forJointAt jointIndex: Int, withParentAt parentIndex: Int?, skinJointInfo: JointConnection?) async throws {
+            let vertexBuffers = try await self.meshes[meshIndex].generateVertexBuffers(in: self, jointInfo: skinJointInfo, withRemappedTexturePages: convertData.remapInfo)
             for vertexBuffer in vertexBuffers {
                 let slice = findMeshSlice(for: vertexBuffer)
                 slice.numVertices += vertexBuffer.numVertices
@@ -329,9 +340,16 @@ extension WAD {
                 // Vertices
                 for i in 0 ..< vertexBuffer.numVertices {
                     reader.set(i * stride)
-                    let x: Float = try reader.read() + offset.x
-                    let y: Float = try reader.read() - offset.y
-                    let z: Float = try reader.read() - offset.z
+                    var x: Float = try reader.read() + offset.x
+                    var y: Float = try reader.read() - offset.y
+                    var z: Float = try reader.read() - offset.z
+                    
+                    if vertexBuffer.layoutType == .normalsWithWeights {
+                        reader.set(i * stride + 32)
+                        x += try reader.read()
+                        y += try reader.read()
+                        z += try reader.read()
+                    }
                     
                     slice.vertexWriter.write(x)
                     slice.vertexWriter.write(y)
@@ -367,8 +385,22 @@ extension WAD {
                 }
                 
                 // Joints and weights
-                for _ in 0 ..< vertexBuffer.numVertices {
-                    slice.jointWriter.write(UInt16(jointIndex))
+                for i in 0 ..< vertexBuffer.numVertices {
+                    if vertexBuffer.layoutType == .normalsWithWeights, let parentIndex {
+                        reader.set(i * stride + 44)
+                        let w0: Float = try reader.read()
+                        //let w1: Float = try reader.read()
+                        if w0 > 0.01 {
+                            slice.jointWriter.write(UInt16(parentIndex))
+                        }
+                        else {
+                            slice.jointWriter.write(UInt16(jointIndex))
+                        }
+                    }
+                    else {
+                        slice.jointWriter.write(UInt16(jointIndex))
+                    }
+                    
                     slice.jointWriter.write(UInt16(0))
                     slice.jointWriter.write(UInt16(0))
                     slice.jointWriter.write(UInt16(0))
@@ -382,6 +414,7 @@ extension WAD {
             }
         }
         
+        /// Keyframe to node remap info
         var nodeRemapInfo: [Int] = []
         func node(for jointIndex: Int) -> Int {
             return nodeRemapInfo[jointIndex]
@@ -394,18 +427,71 @@ extension WAD {
         var jointOffsets: [JointOffset] = []
         
         var skeletonJointNodes: [Int] = []
-        func serializeJoint(_ joint: WKJoint, name: String? = nil, globalOffset: WKVector = .init()) async throws -> Int {
+        
+        var fparent = nodes.count
+        
+        struct NodeTree {
+            var node: Int
+            var children: [NodeTree] = []
+        }
+        var nodeCounter = 0
+        func searchChildren(for joint: WKJoint) -> NodeTree {
+            let children: [NodeTree] = joint.joints.reversed().map { searchChildren(for: $0) }
+            
+            let node = NodeTree(
+                node: nodeCounter,
+                children: children
+            )
+            nodeCounter += 1
+            return node
+        }
+        
+        let nodeTree: NodeTree = searchChildren(for: rootJoint)
+        func parent(of childIndex: Int) -> Int {
+            func look(in tree: NodeTree) -> Int? {
+                for child in tree.children {
+                    if child.node == childIndex {
+                        return tree.node
+                    }
+                    
+                    if let parentIndex = look(in: child) {
+                        return parentIndex
+                    }
+                }
+                
+                return nil
+            }
+            
+            return look(in: nodeTree) ?? childIndex
+        }
+        
+        func serializeJoint(_ joint: WKJoint, parentJoint: WKJoint?, parentIndex: Int?, skinJoint: WKJoint?, name: String? = nil, globalOffset: WKVector = .init()) async throws -> Int {
+            let currentJointIndex = fparent
+            
+            //let currentJointIndex = (parentIndex ?? -1) + 1
             let offset = globalOffset + joint.offset
             
             var childNodes: [Int] = []
             
-            for child in joint.joints.reversed() {
-                let childNode = try await serializeJoint(child, globalOffset: offset)
+            for (childIndex, child) in joint.joints.enumerated().reversed() {
+                let childSkinJoint: WKJoint? = {
+                    guard let skinJoint else {
+                        return nil
+                    }
+                    
+                    guard childIndex < skinJoint.joints.count else {
+                        return nil
+                    }
+                    
+                    return skinJoint.joints[childIndex]
+                }()
+                let childNode = try await serializeJoint(child, parentJoint: joint, parentIndex: currentJointIndex, skinJoint: childSkinJoint, globalOffset: offset)
                 childNodes.append(childNode)
             }
+            fparent += 1
             
             let jointNodeIndex = nodes.count
-            try await serializeMesh(joint.mesh, withOffset: offset, forJointAt: nodeRemapInfo.count)
+            try await serializeMesh(joint.mesh, withOffset: offset, forJointAt: jointNodeIndex, withParentAt: nil, skinJointInfo: nil)
             nodes.append(.init(
                 children: childNodes.isEmpty ? nil : childNodes,
                 rotation: [0,0,0,1],
@@ -414,19 +500,36 @@ extension WAD {
                 name: name
             ))
             
+            // Write skin joint info
+            if let parentJoint, let skinJoint {
+                let jointInfo = JointConnection(
+                    mesh0: parentJoint.mesh,
+                    offset0: parentJoint.offset,
+                    mesh1: joint.mesh,
+                    offset1: joint.offset,
+                    jointType: .regular
+                )
+                
+                //try await serializeMesh(skinJoint.mesh, withOffset: offset, forJointAt: jointNodeIndex, withParentAt: parentIndex, skinJointInfo: jointInfo)
+                try await serializeMesh(skinJoint.mesh, withOffset: offset, forJointAt: jointNodeIndex, withParentAt: parent(of: jointNodeIndex), skinJointInfo: jointInfo)
+                //try await serializeMesh(skinJoint.mesh, withOffset: offset, forJointAt: nodeRemapInfo.count, withParentAt: nodeRemapInfo.count + 1, skinJointInfo: jointInfo)
+            }
+            
             // Return index of the last generated node
             skeletonJointNodes.append(jointNodeIndex)
             jointOffsets.append(.init(offset: offset))
             
             // Append node remap info
             nodeRemapInfo.insert(jointNodeIndex, at: 0)
+            //nodeRemapInfo[currentJointIndex] = jointNodeIndex
             
             return jointNodeIndex
         }
-        let skeletonRootNode = try await serializeJoint(rootJoint, name: String(describing: modelTyle) + "-skeleton")
+        let skeletonRootNode = try await serializeJoint(rootJoint, parentJoint: nil, parentIndex: nil, skinJoint: skinJointsModel?.rootJoint, name: String(describing: modelTyle) + "-skeleton")
         
         
         // MARK: Write mesh data
+        
         let modelMeshIndex = meshes.count
         do {
             // Mesh submeshes
@@ -567,6 +670,7 @@ extension WAD {
         
         
         // MARK: Inverse bind matrices
+        
         let inverseBindMatricesIndex = accessors.count
         do {
             var dataWriter = DataWriter()
@@ -628,6 +732,8 @@ extension WAD {
             )
         )
         
+        
+        // MARK: Animations
         
         var animations: [GLTFAnimation] = []
         func exportAnimation(_ animationIndex: Int) {
