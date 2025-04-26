@@ -27,8 +27,6 @@ fileprivate func serializePng(_ data: Data) throws {
 
 
 func exportPNG(_ contents: [UInt8], width: Int, height: Int) throws -> Data {
-#if (os(macOS) || os(iOS)) //&& DEBUG
-    
     // jesus fucking christ
     var pixels: [UInt8] = []
     let pixelCount = contents.count / 4
@@ -40,6 +38,8 @@ func exportPNG(_ contents: [UInt8], width: Int, height: Int) throws -> Data {
         let a = contents[i + 3]
         pixels.append(contentsOf: [r, g, b, a])
     }
+    
+#if (os(macOS) || os(iOS)) //&& DEBUG
     
     let contentsData = Data(pixels) as CFData
     guard let provider = CGDataProvider(data: contentsData) else {
@@ -87,6 +87,7 @@ func exportPNG(_ contents: [UInt8], width: Int, height: Int) throws -> Data {
 //#endif
     
     return mutableData as Data
+    
 #else
     
     return try saveUncompressedPNG(width: width, height: height, pixels: pixels)

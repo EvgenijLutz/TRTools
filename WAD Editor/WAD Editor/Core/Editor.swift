@@ -252,10 +252,10 @@ class Editor {
             self.wad = wad
             meshConnections = gpuMeshes
             
-#if DEBUG
+#if os(macOS) && DEBUG
             // Export gltf
-            //let glb = try await wad.exportGLTFModel(.LARA)
-            let glb = try await wad.exportGLTFBundle()
+            let glb = try await wad.exportGLTFModel(.LARA)
+            //let glb = try await wad.exportGLTFBundle()
             let path = FileManager.default.temporaryDirectory.appending(component: "test.glb")
             try glb.write(to: path)
             print("File written at \(path)")
