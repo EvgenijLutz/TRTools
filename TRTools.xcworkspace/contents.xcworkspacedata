@@ -17,6 +17,9 @@
       location = "group:TRToolsDependencies">
    </FileRef>
    <FileRef
+      location = "group:TRTools">
+   </FileRef>
+   <FileRef
       location = "group:WAD Editor/WAD Editor.xcodeproj">
    </FileRef>
 </Workspace>

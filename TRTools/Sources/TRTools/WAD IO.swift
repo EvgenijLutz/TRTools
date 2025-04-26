@@ -153,7 +153,7 @@ enum WADExportError: Error {
 
 
 extension WAD {
-    func exportGLTFModel(_ modelIndex: Int) async throws -> Data {
+    public func exportGLTFModel(_ modelIndex: Int) async throws -> Data {
         guard modelIndex >= 0 && modelIndex < models.count else {
             throw WADExportError.indexOutOfBounds(modelIndex)
         }
@@ -163,7 +163,7 @@ extension WAD {
     }
     
     /// Generates a `glb` file contents that conform to [glTF Validator](https://github.khronos.org/glTF-Validator/) rules.
-    func exportGLTFModel(_ modelTyle: TR4ObjectType) async throws -> Data {
+    public func exportGLTFModel(_ modelTyle: TR4ObjectType) async throws -> Data {
         guard let animationModel = findModel(modelTyle) else {
             throw WADError.modelNotFound
         }
@@ -864,11 +864,11 @@ extension WAD {
                         for (index, keyframe) in animation.keyframes.enumerated() {
                             timeWriter.write(Float(index) * timeScale * animationTimeScale)
                             
-                            let rotation = keyframe.rotations[jointIndex].simdQuaternion
-                            dataWriter.write(rotation.vector.x)
-                            dataWriter.write(rotation.vector.y)
-                            dataWriter.write(rotation.vector.z)
-                            dataWriter.write(rotation.vector.w)
+                            let rotation = keyframe.rotations[jointIndex].quaternion
+                            dataWriter.write(rotation.ix)
+                            dataWriter.write(rotation.iy)
+                            dataWriter.write(rotation.iz)
+                            dataWriter.write(rotation.r)
                         }
                     }
                     

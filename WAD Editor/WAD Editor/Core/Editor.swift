@@ -388,8 +388,8 @@ extension Editor: GraphicsViewDelegate {
                 return
             }
             
-            let q0 = keyframe.rotations[meshIndex].simdQuaternion
-            let q1 = nextKeyframe.rotations[meshIndex].simdQuaternion
+            let q0 = keyframe.rotations[meshIndex].quaternion.simd
+            let q1 = nextKeyframe.rotations[meshIndex].quaternion.simd
             let q = simd_slerp(q0, q1, transitionTime)
             
             //var offset = instance.joint.offset.simd

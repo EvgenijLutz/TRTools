@@ -7,17 +7,27 @@
 
 import Foundation
 
-// Because of terrible performance of the PNG package in debug mode
-#if (os(macOS) || os(iOS)) && DEBUG
+// Use Apple's frameworks to compress png if available
+#if (os(macOS) || os(iOS)) //&& DEBUG
 import CoreGraphics
 import ImageIO
-#else
-import PNG
 #endif
 
 
+fileprivate func serializePng(_ data: Data) throws {
+    do {
+        let exportUrl = FileManager.default.temporaryDirectory.appending(component: "export.png")
+        try data.write(to: exportUrl)
+        print("Export succeeded: \(exportUrl)")
+    }
+    catch {
+        print("Could not export: \(error)")
+    }
+}
+
+
 func exportPNG(_ contents: [UInt8], width: Int, height: Int) throws -> Data {
-#if (os(macOS) || os(iOS)) && DEBUG
+#if (os(macOS) || os(iOS)) //&& DEBUG
     
     // jesus fucking christ
     var pixels: [UInt8] = []
@@ -72,56 +82,14 @@ func exportPNG(_ contents: [UInt8], width: Int, height: Int) throws -> Data {
         throw WADExportError.corruptedImageData
     }
     
+//#if DEBUG
+//    try serializePng(mutableData as Data)
+//#endif
+    
     return mutableData as Data
 #else
     
-    // jesus fucking christ
-    var pixels: [UInt32] = []
-    let pixelCount = contents.count / 4
-    for pixelIndex in 0 ..< pixelCount {
-        let i = pixelIndex * 4
-        let b = UInt32(contents[i + 0])
-        let g = UInt32(contents[i + 1])
-        let r = UInt32(contents[i + 2])
-        let a = UInt32(contents[i + 3])
-        let pixel = (b << 24) | (g << 16) | (r << 8) | (a << 0)
-        pixels.append(pixel)
-    }
-    
-    // Cast [UInt8] as [Uint32]
-    let png = PNG.Image(
-        packing: pixels,
-        size: (width, height),
-        layout: .init(
-            format: .bgra8(palette: [], fill: nil)
-            
-            //format: .bgr8(
-            //    palette: [],
-            //    fill: nil,
-            //    key: nil
-            //)
-        )
-    )
-    
-    
-    struct DataDestination: PNG.BytestreamDestination {
-        var contents = Data()
-        
-        mutating func write(_ buffer: [UInt8]) -> Void? {
-            contents.append(contentsOf: buffer)
-        }
-    }
-    
-    var pngData = DataDestination()
-    do {
-        try png.compress(stream: &pngData, level: 0)
-    }
-    catch {
-        print(error)
-        throw error
-    }
-    
-    return pngData.contents
+    return try saveUncompressedPNG(width: width, height: height, pixels: pixels)
     
 #endif
 }

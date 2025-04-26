@@ -6,7 +6,7 @@
 //
 
 import WADKit
-import Lemur
+import TRTools
 import simd
 
 
@@ -17,19 +17,19 @@ extension WKVector {
 }
 
 
-extension WKRotation {
-    var simdQuaternion: simd_quatf {
-        let mul: Float = .pi * 2
-        let vector = SIMD3<Float>(x, y, z) * mul
-        let qx = Transform.quaternionFromEuler(.init(vector.x, 0, 0))
-        let qy = Transform.quaternionFromEuler(.init(0, -vector.y, 0))
-        let qz = Transform.quaternionFromEuler(.init(0, 0, -vector.z))        
-        return (qy * (qx * qz))
-    }
-}
+//extension WKRotation {
+//    var simdQuaternion: simd_quatf {
+//        let mul: Float = .pi * 2
+//        let vector = SIMD3<Float>(x, y, z) * mul
+//        let qx = Transform.quaternionFromEuler(.init(vector.x, 0, 0))
+//        let qy = Transform.quaternionFromEuler(.init(0, -vector.y, 0))
+//        let qz = Transform.quaternionFromEuler(.init(0, 0, -vector.z))        
+//        return (qy * (qx * qz))
+//    }
+//}
 
 
-extension WKQuaternion {
+extension MTQuaternion {
     var simd: simd_quatf {
         .init(ix: ix, iy: iy, iz: iz, r: r)
     }

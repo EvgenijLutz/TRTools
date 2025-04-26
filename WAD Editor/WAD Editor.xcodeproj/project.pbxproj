@@ -7,9 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4CCF1EC82DB6C7600054F491 /* TRToolsDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 4CCF1EC72DB6C7600054F491 /* TRToolsDependencies */; };
-		4CFC49F22DAC474C00380601 /* LZ77 in Frameworks */ = {isa = PBXBuildFile; productRef = 4CFC49F12DAC474C00380601 /* LZ77 */; };
-		4CFC49F42DAC474C00380601 /* PNG in Frameworks */ = {isa = PBXBuildFile; productRef = 4CFC49F32DAC474C00380601 /* PNG */; };
+		4CB60A6F2DBC4FF6002D450A /* TRTools in Frameworks */ = {isa = PBXBuildFile; productRef = 4CB60A6E2DBC4FF6002D450A /* TRTools */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,9 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4CFC49F22DAC474C00380601 /* LZ77 in Frameworks */,
-				4CFC49F42DAC474C00380601 /* PNG in Frameworks */,
-				4CCF1EC82DB6C7600054F491 /* TRToolsDependencies in Frameworks */,
+				4CB60A6F2DBC4FF6002D450A /* TRTools in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,9 +86,7 @@
 			);
 			name = "WAD Editor";
 			packageProductDependencies = (
-				4CFC49F12DAC474C00380601 /* LZ77 */,
-				4CFC49F32DAC474C00380601 /* PNG */,
-				4CCF1EC72DB6C7600054F491 /* TRToolsDependencies */,
+				4CB60A6E2DBC4FF6002D450A /* TRTools */,
 			);
 			productName = "WAD Editor";
 			productReference = 4CB093FA2D74AC3C00CEC841 /* WAD Editor.app */;
@@ -123,7 +117,6 @@
 			mainGroup = 4CB093F12D74AC3C00CEC841;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4CB093FB2D74AC3C00CEC841 /* Products */;
@@ -381,31 +374,10 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tayloraswift/swift-png";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.4.9;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		4CCF1EC72DB6C7600054F491 /* TRToolsDependencies */ = {
+		4CB60A6E2DBC4FF6002D450A /* TRTools */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = TRToolsDependencies;
-		};
-		4CFC49F12DAC474C00380601 /* LZ77 */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */;
-			productName = LZ77;
-		};
-		4CFC49F32DAC474C00380601 /* PNG */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4CFC49F02DAC474C00380601 /* XCRemoteSwiftPackageReference "swift-png" */;
-			productName = PNG;
+			productName = TRTools;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
