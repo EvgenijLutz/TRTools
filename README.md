@@ -28,7 +28,7 @@ This is a command line tool for Windows and macOS to export all .wad objects fro
 
 or in Windows (you can also drag your .wad file direct into the executable):
 ```
-./WADEditorCLI <your_wad_file>.wad
+WADEditorCLI <your_wad_file>.wad
 ```
 
 ![WAD Editor menu](Media/WADEditorCLIExample.png)
