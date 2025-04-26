@@ -65,20 +65,7 @@ class Editor {
     
     
     init() {
-#if false
-        Task {
-            do {
-                if let url = Bundle.main.url(forResource: "medieval_knight", withExtension: "gltf") {
-                //if let url = Bundle.main.url(forResource: "gltf_test", withExtension: "gltf") {
-                    let gltf = try await GLTF.from(url)
-                    print(gltf.asset)
-                }
-            }
-            catch {
-                print(error)
-            }
-        }
-#endif
+        //
     }
     
     
@@ -111,8 +98,15 @@ class Editor {
     
     func loadTestData() async {
         guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
-        //guard let url = Bundle.main.url(forResource: "1-Home", withExtension: "wad") else {
-        //guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
+            return
+        }
+        
+        await loadData(at: url)
+    }
+    
+    
+    func loadTestData2() async {
+        guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
             return
         }
         
@@ -257,14 +251,6 @@ class Editor {
             
             self.wad = wad
             meshConnections = gpuMeshes
-            
-#if DEBUG
-            // Select lara
-            if let modelIndex = wad.models.firstIndex(where: { $0.identifier == .LARA }) {
-                let model = wad.models[modelIndex]
-                showModel(modelIndex: modelIndex, animationIndex: model.animations.isEmpty ? nil : 0)
-            }
-#endif
             
 #if DEBUG
             // Export gltf

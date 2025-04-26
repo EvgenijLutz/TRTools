@@ -355,21 +355,22 @@ extension View {
 
 struct ViewportView: View {
     @State var viewModel: ViewModel
-    @State var timelineVisible: Bool = true
+    @State var timelineVisible: Bool = false
     
     
     var body: some View {
         VStack(spacing: 0) {
             SwiftUIGraphicsView(canvas: viewModel.editor.canvas, delegate: viewModel.editor, inputManager: viewModel.editor.inputManager)
                 .wadDropDestination(viewModel)
-            
-#if false
-            VStack(spacing: 0) {
 #if os(macOS)
                 let separator = Color(.separatorColor)
 #else
                 let separator = Color(.separator)
 #endif
+            
+            
+#if false
+            VStack(spacing: 0) {
                 separator
                     .frame(height: 1)
                     .frame(maxWidth: .infinity)
@@ -400,19 +401,37 @@ struct ViewportView: View {
                 Color(.secondarySystemBackground)
                     .ignoresSafeArea()
 #endif
+                
             }
+#endif
             
             
             if timelineVisible {
-                TimelineEditor { model in
-                    viewModel.editor.connectTimeline(model: model)
+                VStack(spacing: 0) {
+                    separator
+                        .frame(height: 1)
+                        .frame(maxWidth: .infinity)
+                    
+                    TimelineEditor { model in
+                        viewModel.editor.connectTimeline(model: model)
+                    }
+                    .ignoresSafeArea()
                 }
-                .ignoresSafeArea()
                 .transition(.move(edge: .bottom))
             }
-#endif
         }
         //.ignoresSafeArea(edges: [.leading, .trailing, .bottom])
+        .toolbar {
+            Button {
+                withAnimation {
+                    timelineVisible.toggle()
+                }
+            } label: {
+                Image(systemName: "slider.horizontal.below.rectangle")
+                    .padding(8)
+            }
+            .buttonStyle(.borderless)
+        }
     }
 }
 
