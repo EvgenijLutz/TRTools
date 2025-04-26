@@ -44,7 +44,7 @@ let package = Package(
             dependencies: [
                 .product(name: "WADKit", package: "WADKit"),
                 .product(name: "Lemur", package: "Lemur", condition: .when(platforms: [.macOS, .iOS])),
-                .product(name: "Cashmere", package: "Cashmere"),
+                .product(name: "Cashmere", package: "Cashmere", condition: .when(platforms: [.macOS, .iOS])),
             ]
         ),
     ]
