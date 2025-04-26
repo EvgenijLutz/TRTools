@@ -16,7 +16,7 @@ func getDepandencies() -> [Package.Dependency] {
     [
         .package(url: "https://github.com/EvgenijLutz/WADKit.git", exact: .init(1, 1, 0)),
         .package(url: "https://github.com/EvgenijLutz/Lemur.git", exact: .init(1, 0, 0)),
-        .package(url: "https://github.com/EvgenijLutz/Cashmere.git", exact: .init(1, 0, 0)),
+        .package(url: "https://github.com/EvgenijLutz/Cashmere.git", exact: .init(1, 1, 0)),
     ]
 #endif
 }

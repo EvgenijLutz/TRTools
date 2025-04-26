@@ -1,0 +1,33 @@
+{
+  "originHash" : "c5c2da659a7a7d66bfa10cf2e1a27b3c91e64fa7156c2d92ec19914a8b4fed9c",
+  "pins" : [
+    {
+      "identity" : "cashmere",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/EvgenijLutz/Cashmere.git",
+      "state" : {
+        "revision" : "fc833ebdb81512d82b50d5dc2707fe50be8ebdbb",
+        "version" : "1.1.0"
+      }
+    },
+    {
+      "identity" : "lemur",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/EvgenijLutz/Lemur.git",
+      "state" : {
+        "revision" : "198aa79b5250321c3b06d2a85e32018e4b3672df",
+        "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "wadkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/EvgenijLutz/WADKit.git",
+      "state" : {
+        "revision" : "ea8b2270b60c89ad838922cbde51ca760b1d9b64",
+        "version" : "1.1.0"
+      }
+    }
+  ],
+  "version" : 3
+}
