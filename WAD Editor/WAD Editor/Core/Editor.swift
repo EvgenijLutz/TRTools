@@ -268,7 +268,8 @@ class Editor {
             
 #if DEBUG
             // Export gltf
-            let glb = try await wad.exportGLTFModel(.LARA)
+            //let glb = try await wad.exportGLTFModel(.LARA)
+            let glb = try await wad.exportGLTFBundle()
             let path = FileManager.default.temporaryDirectory.appending(component: "test.glb")
             try glb.write(to: path)
             print("File written at \(path)")

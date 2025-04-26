@@ -147,12 +147,141 @@ extension Collection {
 
 
 enum WADExportError: Error {
+    case notImplemented
     case corruptedImageData
     case indexOutOfBounds(_ indx: Int)
 }
 
 
 extension WAD {
+    struct GLTFContents {
+        let convertData: CombinedTexturePages
+        
+        var buffers: [GLTFBuffer] = []
+        var bufferViews: [GLTFBufferView] = []
+        var accessors: [GLTFAccessor] = []
+        var animations: [GLTFAnimation] = []
+        var images: [GLTFImage] = []
+        var materials: [GLTFMaterial] = []
+        var meshes: [GLTFMesh] = []
+        var nodes: [GLTFNode] = []
+        var samplers: [GLTFSampler] = []
+        var scenes: [GLTFScene] = []
+        var skins: [GLTFSkin] = []
+        var textures: [GLTFTexture] = []
+        
+        var binaryData = Data()
+        mutating func appendBinaryData(_ data: Data, alignment: Int = 4) {
+            binaryData.append(data)
+            let result = binaryData.count % alignment
+            if result > 0 {
+                binaryData.append(contentsOf: Data(repeating: 0, count: alignment - result))
+            }
+        }
+        
+        
+        init(source wad: WAD) async throws {
+            let pagesPerRow = Int(ceil(sqrt(Float(wad.texturePages.count))))
+            convertData = await wad.generateCombinedTexturePages(pagesPerRow: pagesPerRow)
+            
+            // Write images, materials and image data - every albedo texture is a material
+            for texture in convertData.textures {
+                let pngData = try exportPNG(texture.contents, width: convertData.width, height: convertData.height)
+                
+                // Add image data
+                let bufferOffset = binaryData.count
+                //binaryData.append(contentsOf: pngData)
+                appendBinaryData(pngData)
+                
+                let bufferViewIndx = bufferViews.count
+                bufferViews.append(
+                    .init(
+                        buffer: 0,
+                        byteOffset: bufferOffset,
+                        byteLength: pngData.count
+                    )
+                )
+                
+                let imageIndex = images.count
+                images.append(
+                    .init(
+                        mimeType: "image/png",
+                        bufferView: bufferViewIndx
+                    )
+                )
+                
+                let samplerIndex = samplers.count
+                samplers.append(
+                    .init(
+                        magFilter: .nearest,
+                        minFilter: .nearest,
+                        wrapS: .clampToEdge,
+                        wrapT: .clampToEdge
+                    )
+                )
+                
+                let albedoTextureIndex = textures.count
+                textures.append(
+                    .init(
+                        sampler: samplerIndex,
+                        source: imageIndex,
+                    )
+                )
+                
+                materials.append(
+                    .init(
+                        pbrMetallicRoughness: .init(
+                            baseColorTexture: .init(
+                                index: albedoTextureIndex,
+                                texCoord: 0
+                            ),
+                            metallicFactor: 0.2,
+                            roughnessFactor: 0.8
+                        ),
+                        alphaMode: .mask,
+                        alphaCutoff: 0.5,
+                        doubleSided: false
+                    )
+                )
+            }
+        }
+        
+        
+        mutating func exportToGLB() async throws -> Data {
+            // TODO: Make something better with this and make function nonmutating
+            // Write buffers
+            if buffers.isEmpty {
+                buffers.append(
+                    .init(
+                        byteLength: binaryData.count
+                    )
+                )
+            }
+            
+            let asset = GLTFAsset(generator: "WAD Editor 1.0.0-alpha1", version: "2.0")
+            let gltf = GLTF(
+                accessors: accessors.orNothing,
+                animations: animations.orNothing,
+                asset: asset,
+                buffers: buffers.orNothing,
+                bufferViews: bufferViews.orNothing,
+                images: images.orNothing,
+                materials: materials.orNothing,
+                meshes: meshes.orNothing,
+                nodes: nodes.orNothing,
+                samplers: samplers.orNothing,
+                scene: scenes.isEmpty ? nil : 0,
+                scenes: scenes.orNothing,
+                skins: skins.orNothing,
+                textures: textures.orNothing
+            )
+            let library = GLTFLibrary(gltf: gltf, binaryChunks: [binaryData])
+            
+            return try await library.exportToGLB()
+        }
+    }
+    
+    
     public func exportGLTFModel(_ modelIndex: Int) async throws -> Data {
         guard modelIndex >= 0 && modelIndex < models.count else {
             throw WADExportError.indexOutOfBounds(modelIndex)
@@ -162,8 +291,8 @@ extension WAD {
         return try await exportGLTFModel(model.identifier)
     }
     
-    /// Generates a `glb` file contents that conform to [glTF Validator](https://github.khronos.org/glTF-Validator/) rules.
-    public func exportGLTFModel(_ modelTyle: TR4ObjectType) async throws -> Data {
+    
+    private func exportGLTFModel(_ modelTyle: TR4ObjectType, into contents: inout GLTFContents) async throws {
         guard let animationModel = findModel(modelTyle) else {
             throw WADError.modelNotFound
         }
@@ -192,97 +321,6 @@ extension WAD {
         
         guard let rootJoint = model.rootJoint else {
             throw WADError.modelNotFound
-        }
-        
-        let pagesPerRow = Int(ceil(sqrt(Float(texturePages.count))))
-        let convertData = await generateCombinedTexturePages(pagesPerRow: pagesPerRow)
-        
-        var buffers: [GLTFBuffer] = []
-        var bufferViews: [GLTFBufferView] = []
-        var accessors: [GLTFAccessor] = []
-        var images: [GLTFImage] = []
-        var materials: [GLTFMaterial] = []
-        var meshes: [GLTFMesh] = []
-        var nodes: [GLTFNode] = []
-        var samplers: [GLTFSampler] = []
-        var scenes: [GLTFScene] = []
-        var skins: [GLTFSkin] = []
-        var textures: [GLTFTexture] = []
-        
-        
-        // The skins array is not used at the moment. Do something useless here so that the compiler doesnt complain.
-        skins.removeAll()
-        
-        
-        var binaryData = Data()
-        func appendBinaryData(_ data: Data, alignment: Int = 4) {
-            binaryData.append(data)
-            let result = binaryData.count % alignment
-            if result > 0 {
-                binaryData.append(contentsOf: Data(repeating: 0, count: alignment - result))
-            }
-        }
-        
-        
-        // Write images, materials and image data - every albedo texture is a material
-        for texture in convertData.textures {
-            let pngData = try exportPNG(texture.contents, width: convertData.width, height: convertData.height)
-            
-            // Add image data
-            let bufferOffset = binaryData.count
-            //binaryData.append(contentsOf: pngData)
-            appendBinaryData(pngData)
-            
-            let bufferViewIndx = bufferViews.count
-            bufferViews.append(
-                .init(
-                    buffer: 0,
-                    byteOffset: bufferOffset,
-                    byteLength: pngData.count
-                )
-            )
-            
-            let imageIndex = images.count
-            images.append(
-                .init(
-                    mimeType: "image/png",
-                    bufferView: bufferViewIndx
-                )
-            )
-            
-            let samplerIndex = samplers.count
-            samplers.append(
-                .init(
-                    magFilter: .nearest,
-                    minFilter: .nearest,
-                    wrapS: .clampToEdge,
-                    wrapT: .clampToEdge
-                )
-            )
-            
-            let albedoTextureIndex = textures.count
-            textures.append(
-                .init(
-                    sampler: samplerIndex,
-                    source: imageIndex,
-                )
-            )
-            
-            materials.append(
-                .init(
-                    pbrMetallicRoughness: .init(
-                        baseColorTexture: .init(
-                            index: albedoTextureIndex,
-                            texCoord: 0
-                        ),
-                        metallicFactor: 0.2,
-                        roughnessFactor: 0.8
-                    ),
-                    alphaMode: .mask,
-                    alphaCutoff: 0.5,
-                    doubleSided: false
-                )
-            )
         }
         
         
@@ -328,8 +366,9 @@ extension WAD {
             return slice
         }
         
+        let jointNodeStart = contents.nodes.count
         func serializeMesh(_ meshIndex: Int, withOffset offset: WKVector, forJointAt jointIndex: Int, withParentAt parentIndex: Int?, skinJointInfo: JointConnection?) async throws {
-            let vertexBuffers = try await self.meshes[meshIndex].generateVertexBuffers(in: self, jointInfo: skinJointInfo, withRemappedTexturePages: convertData.remapInfo)
+            let vertexBuffers = try await self.meshes[meshIndex].generateVertexBuffers(in: self, jointInfo: skinJointInfo, withRemappedTexturePages: contents.convertData.remapInfo)
             for vertexBuffer in vertexBuffers {
                 let slice = findMeshSlice(for: vertexBuffer)
                 slice.numVertices += vertexBuffer.numVertices
@@ -391,14 +430,14 @@ extension WAD {
                         let w0: Float = try reader.read()
                         //let w1: Float = try reader.read()
                         if w0 > 0.01 {
-                            slice.jointWriter.write(UInt16(parentIndex))
+                            slice.jointWriter.write(UInt16(parentIndex - jointNodeStart))
                         }
                         else {
-                            slice.jointWriter.write(UInt16(jointIndex))
+                            slice.jointWriter.write(UInt16(jointIndex - jointNodeStart))
                         }
                     }
                     else {
-                        slice.jointWriter.write(UInt16(jointIndex))
+                        slice.jointWriter.write(UInt16(jointIndex - jointNodeStart))
                     }
                     
                     slice.jointWriter.write(UInt16(0))
@@ -428,7 +467,7 @@ extension WAD {
         
         var skeletonJointNodes: [Int] = []
         
-        var fparent = nodes.count
+        var fparent = contents.nodes.count
         
         struct NodeTree {
             var node: Int
@@ -490,9 +529,9 @@ extension WAD {
             }
             fparent += 1
             
-            let jointNodeIndex = nodes.count
+            let jointNodeIndex = contents.nodes.count
             try await serializeMesh(joint.mesh, withOffset: offset, forJointAt: jointNodeIndex, withParentAt: nil, skinJointInfo: nil)
-            nodes.append(.init(
+            contents.nodes.append(.init(
                 children: childNodes.isEmpty ? nil : childNodes,
                 rotation: [0,0,0,1],
                 scale: [1,1,1],
@@ -530,7 +569,7 @@ extension WAD {
         
         // MARK: Write mesh data
         
-        let modelMeshIndex = meshes.count
+        let modelMeshIndex = contents.meshes.count
         do {
             // Mesh submeshes
             var primitives: [GLTFMeshPrimitive] = []
@@ -540,10 +579,10 @@ extension WAD {
                 
                 // Vertices
                 do {
-                    attributes["POSITION"] = accessors.count
+                    attributes["POSITION"] = contents.accessors.count
                     
-                    accessors.append(.init(
-                        bufferView: bufferViews.count,
+                    contents.accessors.append(.init(
+                        bufferView: contents.bufferViews.count,
                         byteOffset: 0,
                         componentType: .float,
                         count: meshSlice.numVertices /*/ 3*/,
@@ -552,107 +591,107 @@ extension WAD {
                         min: [meshSlice.xArray.min() ?? 0, meshSlice.yArray.min() ?? 0, meshSlice.zArray.min() ?? 0]
                     ))
                     
-                    bufferViews.append(.init(
+                    contents.bufferViews.append(.init(
                         buffer: 0,
-                        byteOffset: binaryData.count,
+                        byteOffset: contents.binaryData.count,
                         byteLength: meshSlice.vertexWriter.data.count,
                         byteStride: 12,
                         target: .arrayBuffer
                     ))
                     
-                    binaryData.append(meshSlice.vertexWriter.data)
+                    contents.binaryData.append(meshSlice.vertexWriter.data)
                 }
                 
                 // Normals
                 if meshSlice.layoutType == .normals || meshSlice.layoutType == .normalsWithWeights {
-                    attributes["NORMAL"] = accessors.count
+                    attributes["NORMAL"] = contents.accessors.count
                     
-                    accessors.append(.init(
-                        bufferView: bufferViews.count,
+                    contents.accessors.append(.init(
+                        bufferView: contents.bufferViews.count,
                         byteOffset: 0,
                         componentType: .float,
                         count: meshSlice.numVertices /*/ 3*/,
                         type: .vec3
                     ))
                     
-                    bufferViews.append(.init(
+                    contents.bufferViews.append(.init(
                         buffer: 0,
-                        byteOffset: binaryData.count,
+                        byteOffset: contents.binaryData.count,
                         byteLength: meshSlice.normalWriter.data.count,
                         byteStride: 12,
                         target: .arrayBuffer
                     ))
                     
-                    binaryData.append(meshSlice.normalWriter.data)
+                    contents.binaryData.append(meshSlice.normalWriter.data)
                 }
                 
                 // UVs
                 do {
-                    attributes["TEXCOORD_0"] = accessors.count
+                    attributes["TEXCOORD_0"] = contents.accessors.count
                     
-                    accessors.append(.init(
-                        bufferView: bufferViews.count,
+                    contents.accessors.append(.init(
+                        bufferView: contents.bufferViews.count,
                         byteOffset: 0,
                         componentType: .float,
                         count: meshSlice.numVertices /*/ 3*/,
                         type: .vec2
                     ))
                     
-                    bufferViews.append(.init(
+                    contents.bufferViews.append(.init(
                         buffer: 0,
-                        byteOffset: binaryData.count,
+                        byteOffset: contents.binaryData.count,
                         byteLength: meshSlice.uvWriter.data.count,
                         byteStride: 8,
                         target: .arrayBuffer
                     ))
                     
-                    binaryData.append(meshSlice.uvWriter.data)
+                    contents.binaryData.append(meshSlice.uvWriter.data)
                 }
                 
                 // Joints
                 do {
-                    attributes["JOINTS_0"] = accessors.count
+                    attributes["JOINTS_0"] = contents.accessors.count
                     
-                    accessors.append(.init(
-                        bufferView: bufferViews.count,
+                    contents.accessors.append(.init(
+                        bufferView: contents.bufferViews.count,
                         byteOffset: 0,
                         componentType: .unsignedShort,
                         count: meshSlice.numVertices /*/ 3*/,
                         type: .vec4
                     ))
                     
-                    bufferViews.append(.init(
+                    contents.bufferViews.append(.init(
                         buffer: 0,
-                        byteOffset: binaryData.count,
+                        byteOffset: contents.binaryData.count,
                         byteLength: meshSlice.jointWriter.data.count,
                         byteStride: 8,
                         target: .arrayBuffer
                     ))
                     
-                    binaryData.append(meshSlice.jointWriter.data)
+                    contents.binaryData.append(meshSlice.jointWriter.data)
                 }
                 
                 // Weights
                 do {
-                    attributes["WEIGHTS_0"] = accessors.count
+                    attributes["WEIGHTS_0"] = contents.accessors.count
                     
-                    accessors.append(.init(
-                        bufferView: bufferViews.count,
+                    contents.accessors.append(.init(
+                        bufferView: contents.bufferViews.count,
                         byteOffset: 0,
                         componentType: .float,
                         count: meshSlice.numVertices /*/ 3*/,
                         type: .vec4
                     ))
                     
-                    bufferViews.append(.init(
+                    contents.bufferViews.append(.init(
                         buffer: 0,
-                        byteOffset: binaryData.count,
+                        byteOffset: contents.binaryData.count,
                         byteLength: meshSlice.weightWriter.data.count,
                         byteStride: 16,
                         target: .arrayBuffer
                     ))
                     
-                    binaryData.append(meshSlice.weightWriter.data)
+                    contents.binaryData.append(meshSlice.weightWriter.data)
                 }
                 
                 primitives.append(.init(
@@ -662,7 +701,7 @@ extension WAD {
                 ))
             }
             
-            meshes.append(.init(
+            contents.meshes.append(.init(
                 primitives: primitives,
                 name: String(describing: modelTyle) + "-mesh"
             ))
@@ -671,7 +710,7 @@ extension WAD {
         
         // MARK: Inverse bind matrices
         
-        let inverseBindMatricesIndex = accessors.count
+        let inverseBindMatricesIndex = contents.accessors.count
         do {
             var dataWriter = DataWriter()
             
@@ -691,42 +730,43 @@ extension WAD {
                 }
             }
             
-            accessors.append(.init(
-                bufferView: bufferViews.count,
+            contents.accessors.append(.init(
+                bufferView: contents.bufferViews.count,
                 byteOffset: 0,
                 componentType: .float,
                 count: jointOffsets.count,
                 type: .mat4
             ))
             
-            bufferViews.append(.init(
+            contents.bufferViews.append(.init(
                 buffer: 0,
-                byteOffset: binaryData.count,
+                byteOffset: contents.binaryData.count,
                 byteLength: dataWriter.data.count,
                 //byteStride: 64,
                 //target: .arrayBuffer
             ))
             
-            binaryData.append(dataWriter.data)
+            contents.binaryData.append(dataWriter.data)
         }
         
         
-        let skinIndex = skins.count
-        skins.append(.init(
+        let skinIndex = contents.skins.count
+        contents.skins.append(.init(
             inverseBindMatrices: inverseBindMatricesIndex,
             skeleton: skeletonRootNode,
-            joints: skeletonJointNodes
+            joints: skeletonJointNodes,
+            name: String(describing: modelTyle) + "-skin"
         ))
         
-        let rootNode = nodes.count
-        nodes.append(
+        let rootNode = contents.nodes.count
+        contents.nodes.append(
             .init(
                 skin: skinIndex,
                 mesh: modelMeshIndex
             )
         )
         
-        scenes.append(
+        contents.scenes.append(
             .init(
                 nodes: [rootNode, skeletonRootNode],
             )
@@ -735,7 +775,6 @@ extension WAD {
         
         // MARK: Animations
         
-        var animations: [GLTFAnimation] = []
         func exportAnimation(_ animationIndex: Int) {
             /// Keyframe time scale. Relative to Blender's 24 fps
             let timeScale = Float(1) / Float(60) * 2
@@ -746,18 +785,18 @@ extension WAD {
             
             
             func makeAccessor(for data: Data, of dataType: GLTFAccessorType, numElements: Int, min: Float? = nil, max: Float? = nil) -> Int {
-                let bufferIndex = bufferViews.count
-                bufferViews.append(
+                let bufferIndex = contents.bufferViews.count
+                contents.bufferViews.append(
                     .init(
                         buffer: 0,
-                        byteOffset: binaryData.count,
+                        byteOffset: contents.binaryData.count,
                         byteLength: data.count
                     )
                 )
                 
-                binaryData.append(data)
+                contents.binaryData.append(data)
                 
-                let accessorIndex = accessors.count
+                let accessorIndex = contents.accessors.count
                 let maxRange: [Float]? = {
                     guard let max else {
                         return nil
@@ -770,7 +809,7 @@ extension WAD {
                     }
                     return [min]
                 }()
-                accessors.append(
+                contents.accessors.append(
                     .init(
                         bufferView: bufferIndex,
                         componentType: .float,
@@ -892,11 +931,11 @@ extension WAD {
             }
             
             
-            animations.append(
+            contents.animations.append(
                 .init(
                     channels: channels,
                     samplers: samplers,
-                    name: "Animation #\(animationIndex)"
+                    name: String(describing: modelTyle) + ".Animation #\(animationIndex)"
                 )
             )
         }
@@ -911,32 +950,48 @@ extension WAD {
         }
 #endif
         
-        
-        // Write buffers
-        buffers.append(.init(
-            byteLength: binaryData.count
-        ))
-        
-        
-        let asset = GLTFAsset(generator: "WAD Editor 1.0.0-alpha1", version: "2.0")
-        let gltf = GLTF(
-            accessors: accessors.orNothing,
-            animations: animations.orNothing,
-            asset: asset,
-            buffers: buffers.orNothing,
-            bufferViews: bufferViews.orNothing,
-            images: images.orNothing,
-            materials: materials.orNothing,
-            meshes: meshes.orNothing,
-            nodes: nodes.orNothing,
-            samplers: samplers.orNothing,
-            scene: scenes.isEmpty ? nil : 0,
-            scenes: scenes.orNothing,
-            skins: skins.orNothing,
-            textures: textures.orNothing
-        )
-        let library = GLTFLibrary(gltf: gltf, binaryChunks: [binaryData])
-        
-        return try await library.exportToGLB()
     }
+    
+    /// Generates a `glb` file contents that conform to [glTF Validator](https://github.khronos.org/glTF-Validator/) rules.
+    public func exportGLTFModel(_ modelTyle: TR4ObjectType) async throws -> Data {
+        var contents = try await GLTFContents(source: self)
+        try await exportGLTFModel(modelTyle, into: &contents)
+        return try await contents.exportToGLB()
+    }
+    
+    /// Exports all movable objects as a big fat glb bundle.
+    public func exportGLTFBundle() async throws -> Data {
+        var contents = try await GLTFContents(source: self)
+#if true
+        for model in self.models {
+            try await exportGLTFModel(model.identifier, into: &contents)
+        }
+#else
+        try await exportGLTFModel(.LARA, into: &contents)
+        try await exportGLTFModel(.BADDY_1, into: &contents)
+#endif
+        return try await contents.exportToGLB()
+    }
+    
+    
+    public struct GLBBundle: Sendable {
+        let type: TR4ObjectType
+        let data: Data
+    }
+    
+    /// Exports all movable objects as a collection of glb bundles.
+    public func exportGLTFBundles() async throws -> [GLBBundle] {
+        var bundles: [GLBBundle] = []
+        for model in self.models {
+            let bundle = try await exportGLTFModel(model.identifier)
+            bundles.append(
+                .init(
+                    type: model.identifier,
+                    data: bundle
+                )
+            )
+        }
+        return bundles
+    }
+    
 }
