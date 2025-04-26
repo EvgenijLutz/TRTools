@@ -144,6 +144,8 @@ class GLTFExportPromise: NSObject, NSFilePromiseProviderDelegate {
 
 @MainActor
 @Observable class ViewModel {
+    static weak var current: ViewModel? = nil
+    
     let editor = Editor()
     
     //@Published var path: NavigationPath
@@ -164,8 +166,23 @@ class GLTFExportPromise: NSObject, NSFilePromiseProviderDelegate {
     }
     
     
+    func loadDefaultTestData() async {
+        guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
+            return
+        }
+        
+        await editor.loadData(at: url)
+        
+        reload()
+    }
+    
+    
     func loadTestData() async {
-        await editor.loadTestData()
+        guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
+            return
+        }
+        
+        await editor.loadData(at: url)
         
         reload()
     }
@@ -539,15 +556,18 @@ struct ContentView: View {
 #endif
         }
         .navigationSplitViewStyle(.balanced)
-#if DEBUG
-        .task {
-            let timeTaken = await ContinuousClock().measure {
-                await viewModel.loadTestData()
-            }
-            print("Import time taken: \(timeTaken)")
-        }
-#endif
+//#if DEBUG
+//        .task {
+//            let timeTaken = await ContinuousClock().measure {
+//                await viewModel.loadDefaultTestData()
+//            }
+//            print("Import time taken: \(timeTaken)")
+//        }
+//#endif
         .wadDropDestination(viewModel)
+        .onAppear {
+            ViewModel.current = viewModel
+        }
     }
 }
 

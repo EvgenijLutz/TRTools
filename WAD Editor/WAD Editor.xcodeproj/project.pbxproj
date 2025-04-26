@@ -37,7 +37,6 @@
 		4CB093F12D74AC3C00CEC841 = {
 			isa = PBXGroup;
 			children = (
-				4CCA99832D75D74900EDB8C6 /* Linked */,
 				4CB093FC2D74AC3C00CEC841 /* WAD Editor */,
 				4CCBE7132D74B34E007347CB /* Frameworks */,
 				4CB093FB2D74AC3C00CEC841 /* Products */,
@@ -50,13 +49,6 @@
 				4CB093FA2D74AC3C00CEC841 /* WAD Editor.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		4CCA99832D75D74900EDB8C6 /* Linked */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Linked;
 			sourceTree = "<group>";
 		};
 		4CCBE7132D74B34E007347CB /* Frameworks */ = {

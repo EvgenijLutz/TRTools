@@ -37,15 +37,19 @@ struct WADEditorApp: App {
         .commands {
             CommandGroup(before: .importExport) {
                 Button {
-                    //
+                    Task {
+                        await ViewModel.current?.loadDefaultTestData()
+                    }
                 } label: {
-                    Text("Import test WAD")
+                    Text("Load default test WAD")
                 }
                 
                 Button {
-                    //
+                    Task {
+                        await ViewModel.current?.loadTestData()
+                    }
                 } label: {
-                    Text("Import...")
+                    Text("Load test WAD")
                 }
             }
             

@@ -53,6 +53,7 @@ class Editor {
     private var _orbitYDirection: Float = -1
     
     
+    private var currentModel: WKModel? = nil
     public var currentAnimatinIndex: Int = -1
     public var currentAnimation: WKAnimation? = nil {
         didSet {
@@ -82,6 +83,7 @@ class Editor {
         canvas.shadedMeshes = []
         canvas.weightedMeshes = []
         currentMeshIndex = nil
+        currentModel = nil
         currentAnimatinIndex = -1
         currentAnimation = nil
         jointInstance = nil
@@ -93,24 +95,10 @@ class Editor {
     func connectTimeline(model: TimelineEditorModel) {
         timelineModel = model
         timelineModel?.clear()
-    }
-    
-    
-    func loadTestData() async {
-        guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
-            return
-        }
         
-        await loadData(at: url)
-    }
-    
-    
-    func loadTestData2() async {
-        guard let url = Bundle.main.url(forResource: "1-tutorial", withExtension: "wad") else {
-            return
+        if let currentModel {
+            editAnimations(for: currentModel)
         }
-        
-        await loadData(at: url)
     }
     
     
@@ -755,6 +743,7 @@ extension Editor {
             animationStartTime = -1
             displayAnimationKeyframe(0)
             
+            currentModel = model
             editAnimations(for: model)
         }
         else {
