@@ -975,14 +975,15 @@ extension WAD {
     
     
     public struct GLBBundle: Sendable {
-        let type: TR4ObjectType
-        let data: Data
+        public let type: TR4ObjectType
+        public let data: Data
     }
     
     /// Exports all movable objects as a collection of glb bundles.
     public func exportGLTFBundles() async throws -> [GLBBundle] {
         var bundles: [GLBBundle] = []
         for model in self.models {
+            print("Generate " + String(describing: model.identifier))
             let bundle = try await exportGLTFModel(model.identifier)
             bundles.append(
                 .init(
