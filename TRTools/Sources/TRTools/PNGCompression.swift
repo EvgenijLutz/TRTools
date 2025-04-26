@@ -26,9 +26,9 @@ func saveUncompressedPNG(width: Int, height: Int, pixels: [UInt8]) throws -> Dat
         chunk.append(contentsOf: withUnsafeBytes(of: crc.bigEndian, Array.init))
         return chunk
     }
-    print(UInt32(width))
-    print(UInt32(width).littleEndian)
-    print(UInt32(width).bigEndian)
+    //print(UInt32(width))
+    //print(UInt32(width).littleEndian)
+    //print(UInt32(width).bigEndian)
 
     var ihdr = Data()
     
