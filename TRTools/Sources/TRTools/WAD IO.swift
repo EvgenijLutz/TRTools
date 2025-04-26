@@ -935,7 +935,7 @@ extension WAD {
                 .init(
                     channels: channels,
                     samplers: samplers,
-                    name: String(describing: modelTyle) + ".Animation #\(animationIndex)"
+                    name: "Animation #\(animationIndex)"
                 )
             )
         }

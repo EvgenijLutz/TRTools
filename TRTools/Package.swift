@@ -7,7 +7,8 @@ let package = Package(
     name: "TRTools",
     platforms: [
         .macOS(.v15),
-        .iOS(.v18)
+        .iOS(.v18),
+        .custom("Windows", versionString: "10")
     ],
     products: [
         .library(

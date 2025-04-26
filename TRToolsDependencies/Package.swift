@@ -43,7 +43,7 @@ let package = Package(
             name: "TRToolsDependencies",
             dependencies: [
                 .product(name: "WADKit", package: "WADKit"),
-                .product(name: "Lemur", package: "Lemur"),
+                .product(name: "Lemur", package: "Lemur", condition: .when(platforms: [.macOS, .iOS])),
                 .product(name: "Cashmere", package: "Cashmere"),
             ]
         ),
