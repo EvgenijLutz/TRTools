@@ -5,6 +5,9 @@
       location = "group:README.md">
    </FileRef>
    <FileRef
+      location = "container:../DataIO">
+   </FileRef>
+   <FileRef
       location = "container:../WADKit">
    </FileRef>
    <FileRef

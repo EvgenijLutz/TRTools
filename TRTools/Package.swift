@@ -32,7 +32,6 @@ let package = Package(
                 .product(name: "TRToolsDependencies", package: "TRToolsDependencies")
             ]
         ),
-        
         .executableTarget(
             name: "WADEditorCLI",
             dependencies: [

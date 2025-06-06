@@ -7,6 +7,7 @@
 
 import Foundation
 import WADKit
+import DataIO
 
 
 struct IOVector3 {
@@ -26,83 +27,7 @@ struct IOVector3 {
 }
 
 
-struct DataReader {
-    enum DataReaderError: Error {
-        case strangeDataSize(offset: Int, type: Any.Type)
-        case indexOutOfRange(offset: Int, endOffset: Int, type: Any.Type)
-        case unwrapMemoryError(offset: Int, endOffset: Int, type: Any.Type)
-        case other(_ message: String)
-    }
-    
-    let data: Data
-    private(set) var offset: Int
-    
-    
-    init(_ data: Data) {
-        self.data = data
-        self.offset = 0
-    }
-    
-    mutating func reset() {
-        offset = 0
-    }
-    
-    mutating func set<SomeType: BinaryInteger>(_ newOffset: SomeType) {
-        offset = Int(newOffset)
-    }
-    
-    mutating func skip<SomeType: BinaryInteger>(_ bytesToSkip: SomeType) {
-        let numBytes = Int(bytesToSkip)
-        offset += numBytes
-    }
-    
-    mutating func back(_ bytesToGoBack: Int) {
-        offset -= bytesToGoBack
-    }
-    
-    mutating func read<SomeType>() throws -> SomeType {
-        let length = MemoryLayout<SomeType>.size
-        guard length > 0 else {
-            throw DataReaderError.strangeDataSize(offset: offset, type: SomeType.self)
-        }
-        
-        let endIndex = offset + length
-        guard offset >= 0 && endIndex <= data.count else {
-            throw DataReaderError.indexOutOfRange(offset: offset, endOffset: endIndex, type: SomeType.self)
-        }
-        
-        let value = try data[data.startIndex.advanced(by: offset) ..< data.startIndex.advanced(by: endIndex)].withUnsafeBytes {
-            guard let value = $0.baseAddress?.loadUnaligned(as: SomeType.self) else {
-                throw DataReaderError.unwrapMemoryError(offset: offset, endOffset: endIndex, type: SomeType.self)
-            }
-            
-            return value
-        }
-        
-        offset = endIndex
-        return value
-    }
-    
-    mutating func readData<Integer: BinaryInteger>(ofLength length: Integer) throws -> Data {
-        guard length >= 0 else {
-            throw DataReaderError.strangeDataSize(offset: offset, type: Data.self)
-        }
-        
-        if length == 0 {
-            return Data()
-        }
-        
-        let endIndex = offset + Int(length)
-        guard offset >= 0 && endIndex <= data.count else {
-            throw DataReaderError.indexOutOfRange(offset: offset, endOffset: endIndex, type: Data.self)
-        }
-        
-        let value = data[data.startIndex.advanced(by: offset) ..< data.startIndex.advanced(by: endIndex)]
-        
-        offset = endIndex
-        return value
-    }
-}
+
 
 
 struct DataWriter {

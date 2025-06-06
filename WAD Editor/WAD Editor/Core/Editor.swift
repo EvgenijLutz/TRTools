@@ -113,7 +113,7 @@ class Editor {
         
         do {
             let now = CACurrentMediaTime()
-            let wad = try await WAD.fromFileURL(url: url)
+            let wad = try await WAD.fromFile(at: url)
             let elapsed = CACurrentMediaTime() - now
             print("Load WAD time taken: \(elapsed) seconds")
             print(wad)

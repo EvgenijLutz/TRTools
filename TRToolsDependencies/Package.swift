@@ -4,7 +4,7 @@
 import PackageDescription
 
 func getDepandencies() -> [Package.Dependency] {
-#if false
+#if true
     // Local dependencies for development
     [
         .package(path: "../../WADKit"),
@@ -12,7 +12,7 @@ func getDepandencies() -> [Package.Dependency] {
         .package(path: "../../Cashmere"),
     ]
 #else
-    // Local dependencies for release
+    // Remote dependencies for release
     [
         .package(url: "https://github.com/EvgenijLutz/WADKit.git", exact: .init(1, 1, 0)),
         .package(url: "https://github.com/EvgenijLutz/Lemur.git", exact: .init(1, 0, 0)),

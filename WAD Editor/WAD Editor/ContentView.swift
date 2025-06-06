@@ -166,6 +166,22 @@ class GLTFExportPromise: NSObject, NSFilePromiseProviderDelegate {
     }
     
     
+    func loadDefaultWAD2() async {
+        do {
+            //guard let url = Bundle.main.url(forResource: "Classic 2 - Glasses", withExtension: "wad2") else {
+            guard let url = Bundle.main.url(forResource: "Classic 2", withExtension: "wad2") else {
+                return
+            }
+            
+            let wad2 = try await WAD2.fromFile(at: url)
+            print(String(describing: wad2.movables.count))
+        }
+        catch {
+            print(error)
+        }
+    }
+    
+    
     func loadDefaultTestData() async {
         guard let url = Bundle.main.url(forResource: "tut1", withExtension: "WAD") else {
             return
@@ -556,14 +572,14 @@ struct ContentView: View {
 #endif
         }
         .navigationSplitViewStyle(.balanced)
-//#if DEBUG
-//        .task {
-//            let timeTaken = await ContinuousClock().measure {
-//                await viewModel.loadDefaultTestData()
-//            }
-//            print("Import time taken: \(timeTaken)")
-//        }
-//#endif
+#if DEBUG
+        .task {
+            let timeTaken = await ContinuousClock().measure {
+                await viewModel.loadDefaultWAD2()
+            }
+            print("Import time taken: \(timeTaken)")
+        }
+#endif
         .wadDropDestination(viewModel)
         .onAppear {
             ViewModel.current = viewModel
