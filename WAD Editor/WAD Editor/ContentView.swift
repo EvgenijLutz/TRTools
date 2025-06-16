@@ -79,6 +79,7 @@ class GLTFExportData {
     }
 }
 
+#if os(macOS)
 class GLTFExportPromise: NSObject, NSFilePromiseProviderDelegate {
     deinit {
         print("Deinit promise")
@@ -140,6 +141,7 @@ class GLTFExportPromise: NSObject, NSFilePromiseProviderDelegate {
     }
     
 }
+#endif
 
 
 @MainActor
@@ -155,7 +157,9 @@ class GLTFExportPromise: NSObject, NSFilePromiseProviderDelegate {
     var navigatorList: [NavigatorItem] = []
     var selection: UUID? = nil
     
+    #if os(macOS)
     let gltfPromise = GLTFExportPromise()
+    #endif
     
     
     init() {
@@ -519,7 +523,7 @@ struct ContentView: View {
                 //else {
                 //    navValue = false
                 //}
-            } exportItemAction: { [weak viewModel] item in
+            } /*exportItemAction: { [weak viewModel] item in
                 guard let viewModel else {
                     return nil
                 }
@@ -532,7 +536,7 @@ struct ContentView: View {
                 let provider = NSFilePromiseProvider(fileType: "org.khronos.gltf.glb", delegate: viewModel.gltfPromise)
                 provider.userInfo = GLTFExportData(wad: wad, item: item)
                 return provider
-            }
+            }*/
             .ignoresSafeArea()
             .navigationTitle("WAD Editor")
             .navigationDestination(isPresented: $navValue) {
@@ -575,7 +579,8 @@ struct ContentView: View {
 #if DEBUG
         .task {
             let timeTaken = await ContinuousClock().measure {
-                await viewModel.loadDefaultWAD2()
+                await viewModel.loadTestData()
+                //await viewModel.loadDefaultWAD2()
             }
             print("Import time taken: \(timeTaken)")
         }
