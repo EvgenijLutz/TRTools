@@ -25,7 +25,7 @@ struct TransformComponent: Component {
 }
 
 struct RenderableComponent: Component {
-    let canvas: Canvas
+    let canvas: LMCanvas
     
     /// Global transform
     var transform: TransformComponent
@@ -38,7 +38,7 @@ struct RenderableComponent: Component {
     var meshInstances: [MeshInstance] = []
     
     
-    init(canvas: Canvas, transform: TransformComponent) {
+    init(canvas: LMCanvas, transform: TransformComponent) {
         self.canvas = canvas
         self.transform = transform
     }
@@ -54,7 +54,7 @@ struct Entity {
 
 
 class TheScene {
-    let canvas = Canvas()
+    let canvas = LMCanvas()
     
     let entities: [Entity] = []
     

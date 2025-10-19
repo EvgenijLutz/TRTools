@@ -34,7 +34,7 @@ struct JointInstance {
 @MainActor
 class Editor {
     let inputManager = InputManager()
-    let canvas = Lemur.Canvas()
+    let canvas = Lemur.LMCanvas()
     var timelineModel: TimelineEditorModel?
     
     
@@ -240,7 +240,7 @@ class Editor {
             self.wad = wad
             meshConnections = gpuMeshes
             
-#if os(macOS) && DEBUG
+#if os(macOS) && DEBUG && false
             // Export gltf
             let glb = try await wad.exportGLTFModel(.LARA)
             //let glb = try await wad.exportGLTFBundle()
